@@ -1,0 +1,15 @@
+name: anisoML
+channels:
+  - conda-forge
+dependencies:
+  - python >=3.10
+  - flowermd
+  - numpy
+  - pytorch
+  - pytorch-cuda=11.7
+  - signac=1.7.0
+  - signac-flow=0.18.1
+  - pandas
+  - matplotlib
+  - wandb
+  - jupyter
