@@ -8,6 +8,7 @@ import time
 
 class BasePairNN(nn.Module):
     """Base class for neural networks trained on pair particles."""
+
     def __init__(self, in_dim, hidden_dim, out_dim, n_layers, act_fn="ReLU",
                  dropout=0.3, batch_norm=True, device=None
                  ):
@@ -21,7 +22,6 @@ class BasePairNN(nn.Module):
         self.in_dim = in_dim + 2
         self.batch_norm = batch_norm
 
-
         self.net = self._get_net()
         self.net.apply(self.init_net_weights)
 
@@ -29,6 +29,7 @@ class BasePairNN(nn.Module):
         # todo: add option to initialize uniformly for weights and biases
         if isinstance(m, nn.Linear):
             torch.nn.init.xavier_uniform_(m.weight)
+
     #             m.bias.data.fill_(0.01)
 
     def _get_act_fn(self):
@@ -36,13 +37,32 @@ class BasePairNN(nn.Module):
         return act()
 
     def _prep_input(self, x1, x2, q1, q2):
-
         dr = x1 - x2
-        r = torch.norm(dr, dim=1, keepdim=True)
-        x = torch.concat((features, r, 1. / r), dim=1)
+        R = torch.norm(dr, dim=1, keepdim=True)
+        dr = dr / R
 
-        return x.to(self.device)
+        # convert dr vector to a quaternion
+        dr_q = torch.tensor(rowan.normalize(torch.cat((torch.zeros(dr.shape[0], 1), dr), dim=1)))
 
+
+        # calculate q1 applied to q2 and vice versa
+        q1q2 = torch.tensor(rowan.multiply(q1, rowan.conjugate(q2)))
+
+
+        # rotate dr based on q1 and q2 and q1q2
+        dr_q1 = torch.tensor(rowan.multiply(rowan.multiply(q1, dr_q),
+                                            rowan.conjugate(q1)))
+        dr_q2 = torch.tensor(rowan.multiply(rowan.multiply(q2, dr_q),
+                                            rowan.conjugate(q2)))
+        dr_q1q2 = torch.tensor(rowan.multiply(rowan.multiply(q1q2, dr_q),
+                                              rowan.conjugate(q1q2)))
+
+
+        features = torch.concatenate(
+            (R, 1./R, dr, q1, q2, q1q2, dr_q1, dr_q2, dr_q1q2), dim=1)
+
+
+        return features.to(self.device)
 
 
 class PairNN(BasePairNN):
