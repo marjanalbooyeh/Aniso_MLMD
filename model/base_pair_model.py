@@ -14,7 +14,8 @@ class BasePairNN(nn.Module):
                  ):
         super(BasePairNN, self).__init__()
         self.hidden_dim = hidden_dim
-        self.out_dim = out_dim
+        self.energy_out_dim = 1
+        self.torque_out_dim = 3
         self.n_layers = n_layers
         self.act_fn = act_fn
         self.dropout = dropout
@@ -22,15 +23,18 @@ class BasePairNN(nn.Module):
         self.in_dim = in_dim + 2
         self.batch_norm = batch_norm
 
-        self.net = self._get_net()
-        self.net.apply(self.init_net_weights)
+        self.force_net = self._get_force_net(self.energy_out_dim)
+        self.torque_net = self._get_torque_net(self.torque_out_dim)
+
+        # initialize weights and biases
+        self.force_net.apply(self.init_net_weights)
+        self.torque_net.apply(self.init_net_weights)
 
     def init_net_weights(self, m):
         # todo: add option to initialize uniformly for weights and biases
         if isinstance(m, nn.Linear):
             torch.nn.init.xavier_uniform_(m.weight)
-
-    #             m.bias.data.fill_(0.01)
+            m.bias.data.fill_(0.01)
 
     def _get_act_fn(self):
         act = getattr(nn, self.act_fn)
@@ -70,6 +74,32 @@ class PairNN(BasePairNN):
         super(PairNN, self).__init__(in_dim, hidden_dim, out_dim, n_layers,
                                      **kwargs)
 
+    def _get_force_net(self, energy_out_dim):
+        layers = [nn.Linear(self.in_dim, self.hidden_dim), self._get_act_fn()]
+        for i in range(self.n_layers - 1):
+            layers.append(nn.Linear(self.hidden_dim, self.hidden_dim))
+            if self.batch_norm:
+                layers.append(nn.BatchNorm1d(self.hidden_dim))
+            layers.append(self._get_act_fn())
+            layers.append(nn.Dropout(p=self.dropout))
+        layers.append(nn.Linear(self.hidden_dim, self.out_dim))
+        return nn.Sequential(*layers)
+
+    def forward(self, x1, x2, q1, q2):
+        x = self._prep_input(x1, x2, q1, q2)
+        energy = self.force_net(x)
+        force = -torch.autograd.grad(energy.sum(),
+                                     x1,
+                                     create_graph=True)[0]
+        torque = self.torque_net(x)
+        return force, torque
+
+
+class PairNN_Force_Torque(BasePairNN):
+    def __init__(self, in_dim, hidden_dim, n_layers, **kwargs):
+        super(PairNN_Force_Torque, self).__init__(in_dim, hidden_dim, out_dim, n_layers,
+                                     **kwargs)
+
     def _get_net(self):
         layers = [nn.Linear(self.in_dim, self.hidden_dim), self._get_act_fn()]
         for i in range(self.n_layers - 1):
@@ -85,7 +115,6 @@ class PairNN(BasePairNN):
         x = self._prep_input(x1, x2, q1, q2)
         out = self.net(x)
         return out
-
 
 class PairNNSkipShared(BasePairNN):
     def __init__(self, in_dim, hidden_dim, out_dim, n_layers, **kwargs):
