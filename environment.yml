@@ -13,6 +13,6 @@ dependencies:
   - signac=1.7.0
   - signac-flow=0.18.1
   - pandas
-  - matplotlib
+  - matplotlibmarjan
   - wandb
   - jupyter

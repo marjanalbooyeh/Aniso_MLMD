@@ -9,13 +9,12 @@ import time
 class BasePairNN(nn.Module):
     """Base class for neural networks trained on pair particles."""
 
-    def __init__(self, in_dim, hidden_dim, out_dim, n_layers, act_fn="ReLU",
+    def __init__(self, in_dim, hidden_dim, n_layers, act_fn="ReLU",
                  dropout=0.3, batch_norm=True, device=None
                  ):
         super(BasePairNN, self).__init__()
         self.hidden_dim = hidden_dim
         self.energy_out_dim = 1
-        self.torque_out_dim = 3
         self.n_layers = n_layers
         self.act_fn = act_fn
         self.dropout = dropout
@@ -23,12 +22,10 @@ class BasePairNN(nn.Module):
         self.in_dim = in_dim + 2
         self.batch_norm = batch_norm
 
-        self.force_net = self._get_force_net(self.energy_out_dim)
-        self.torque_net = self._get_torque_net(self.torque_out_dim)
+        self.energy_net = self._get_energy_net(self.energy_out_dim)
 
         # initialize weights and biases
-        self.force_net.apply(self.init_net_weights)
-        self.torque_net.apply(self.init_net_weights)
+        self.energy_net.apply(self.init_net_weights)
 
     def init_net_weights(self, m):
         # todo: add option to initialize uniformly for weights and biases
@@ -40,7 +37,26 @@ class BasePairNN(nn.Module):
         act = getattr(nn, self.act_fn)
         return act()
 
-    def _prep_input(self, x1, x2, q1, q2):
+    def _prep_input_rotation_matrix(self, x1, x2, R1, R2):
+        # x1: particle 1 positions
+        # x2: particle 2 positions
+        # R1: particle 1 orientations (rotation matrix 3x3)
+        # R2: particle 2 orientations (rotation matrix 3x3)
+
+        dr = x1 - x2
+        R = torch.norm(dr, dim=1, keepdim=True)
+        dr = dr / R
+
+        # calculate dr vector in rotated frame
+        dr_rot = torch.matmul(R1, dr.unsqueeze(-1)).squeeze(-1)
+
+
+    def _prep_input_quat(self, x1, x2, q1, q2):
+        # x1: particle 1 positions
+        # x2: particle 2 positions
+        # q1: particle 1 orientations (quaternion)
+        # q2: particle 2 orientations (quaternion)
+
         dr = x1 - x2
         R = torch.norm(dr, dim=1, keepdim=True)
         dr = dr / R
@@ -74,7 +90,7 @@ class PairNN(BasePairNN):
         super(PairNN, self).__init__(in_dim, hidden_dim, out_dim, n_layers,
                                      **kwargs)
 
-    def _get_force_net(self, energy_out_dim):
+    def _get_energy_net(self):
         layers = [nn.Linear(self.in_dim, self.hidden_dim), self._get_act_fn()]
         for i in range(self.n_layers - 1):
             layers.append(nn.Linear(self.hidden_dim, self.hidden_dim))
