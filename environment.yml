@@ -9,10 +9,11 @@ dependencies:
   - flowermd
   - numpy
   - pytorch
-  - pytorch-cuda=12.2
+  - pytorch-cuda=12.1
+  - pytorch3d
   - signac=1.7.0
   - signac-flow=0.18.1
   - pandas
-  - matplotlibmarjan
+  - matplotlib
   - wandb
   - jupyter

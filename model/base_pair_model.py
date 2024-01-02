@@ -1,9 +1,7 @@
 import torch
 import torch.nn as nn
 import rowan
-from pytorch3d.transforms import quaternion_invert, quaternion_raw_multiply
-from torch.nn.functional import pad
-import time
+from rotation_matrix_ops import dot_product, cross_product
 
 
 class BasePairNN(nn.Module):
@@ -37,15 +35,28 @@ class BasePairNN(nn.Module):
         act = getattr(nn, self.act_fn)
         return act()
 
-    def _prep_input_rotation_matrix(self, x1, x2, R1, R2):
+    def _prep_features_rot_matrix(self, x1, x2, R1, R2):
         # x1: particle 1 positions
         # x2: particle 2 positions
         # R1: particle 1 orientations (rotation matrix 3x3)
         # R2: particle 2 orientations (rotation matrix 3x3)
 
+        features = []
+
         dr = x1 - x2
         R = torch.norm(dr, dim=1, keepdim=True)
         dr = dr / R
+        inv_r = 1. / R
+
+        features.extend([dr, R, inv_r])
+
+        features.append(dot_product(R1, R2))
+        features.append(cross_product(R1, R2))
+        
+
+
+
+
 
         # calculate dr vector in rotated frame
         dr_rot = torch.matmul(R1, dr.unsqueeze(-1)).squeeze(-1)
