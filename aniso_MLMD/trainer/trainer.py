@@ -3,7 +3,7 @@ import torch.nn as nn
 import wandb
 
 from data_loader import load_datasets, load_overfit_data
-from model import PairNN_Force_Torque
+from aniso_MLMD.model import PairNN_Force_Torque
 
 
 class MLTrainer:
@@ -15,19 +15,14 @@ class MLTrainer:
         self.group = config.group
         self.notes = config.notes
         self.tags = config.tags
-        self.target_type = config.target_type
 
         # dataset parameters
         self.data_path = config.data_path
-        self.inp_mode = config.inp_mode
-        self.augment_pos = config.augment_pos
-        self.augment_orient = config.augment_orient
         self.batch_size = config.batch_size
         self.shrink = config.shrink
         self.overfit = config.overfit
 
         # model parameters
-        self.model_type = config.model_type
         self.in_dim = config.in_dim
         self.hidden_dim = config.hidden_dim
         self.n_layer = config.n_layer
@@ -149,10 +144,7 @@ class MLTrainer:
             "optim": self.optim,
             "decay": self.decay,
             "act_fn": self.act_fn,
-            "inp_mode": self.inp_mode,
-            "model_type": self.model_type,
             "dropout": self.dropout,
-            "target_type": self.target_type,
             "use_scheduler": self.use_scheduler,
             "scheduler_type": self.scheduler_type,
             "loss_type": self.loss_type,

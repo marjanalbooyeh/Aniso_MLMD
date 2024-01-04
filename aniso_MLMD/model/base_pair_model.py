@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-import rowan
 import rotation_matrix_ops as rmo
 
 
