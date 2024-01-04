@@ -13,6 +13,7 @@ workspace/
 
 #wandb files
 wandb/
+.pth
 # Tutorial/test files
 *.gsd
 *.txt
