@@ -5,11 +5,11 @@ channels:
   - nvidia
   - defaults
 dependencies:
-  - python >=3.10
+  - pytorch
+  - pytorch-cuda=11.7
   - flowermd
   - numpy
-  - pytorch=2.0.1
-  - pytorch-cuda=11.7
+  - rowan
   - pytorch3d
   - signac=1.7.0
   - signac-flow=0.18.1

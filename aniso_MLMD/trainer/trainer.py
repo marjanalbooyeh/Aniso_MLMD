@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import wandb
 
-from data_loader import load_datasets, load_overfit_data
+from aniso_MLMD.trainer.data_loader import load_datasets, load_overfit_data
 from aniso_MLMD.model import PairNN_Force_Torque
 
 
@@ -189,7 +189,7 @@ class MLTrainer:
         tq_y = torch.cross(torque_grad[:, :, 1], R1[:, :, 1])
         tq_z = torch.cross(torque_grad[:, :, 2], R1[:, :, 2])
         predicted_torque = tq_x + tq_y + tq_z
-        return predicted_torque
+        return predicted_torque.to(self.device)
 
     def _train(self):
         self.model.train()
@@ -214,8 +214,7 @@ class MLTrainer:
                 self.device)
             torque_grad = - torch.autograd.grad(energy_prediction.sum(),
                                                 R1,
-                                                create_graph=True)[0].to(
-                self.device)
+                                                create_graph=True)[0]
 
             predicted_torque = self._calculate_torque(torque_grad, R1)
 
@@ -269,8 +268,7 @@ class MLTrainer:
                 self.device)
             torque_grad = - torch.autograd.grad(energy_prediction.sum(),
                                                 R1,
-                                                create_graph=True)[0].to(
-                self.device)
+                                                create_graph=True)[0]
 
             predicted_torque = self._calculate_torque(torque_grad, R1)
 

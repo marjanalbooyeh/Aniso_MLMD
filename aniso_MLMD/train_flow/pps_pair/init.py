@@ -26,15 +26,15 @@ def get_parameters():
     parameters["tags"] = ["random sampling"]
 
     # dataset parameters
-    parameters["data_path"] =["/home/marjan/Documents/code-base/ml_datasets/pps_pair"]
-    parameters["batch_size"] = [8]
+    parameters["data_path"] =["/home/marjanalbooyeh/Aniso_ML_MD_project/ml_datasets/pps_pair"]
+    parameters["batch_size"] = [16]
     parameters["shrink"] = [False]
     parameters["overfit"] = [False]
 
     # model parameters
     parameters["in_dim"] = [92]
-    parameters["hidden_dim"] = [128, 256]
-    parameters["n_layer"] = [3, 5]
+    parameters["hidden_dim"] = [64, 128, 256]
+    parameters["n_layer"] = [5]
     parameters["act_fn"] = ["Tanh"]
     parameters["dropout"] = [0.3]
     parameters["batch_norm"] = [False]
@@ -50,10 +50,10 @@ def get_parameters():
     parameters["loss_type"] = ["mse"]
     parameters["prior_energy"] = [True]
     parameters["prior_energy_sigma"] = [1]
-    parameters["prior_energy_n"] = [6, 12]
+    parameters["prior_energy_n"] = [12]
 
     # run parameters
-    parameters["epochs"] = [50000]
+    parameters["epochs"] = [10000]
 
     return list(parameters.keys()), list(product(*parameters.values()))
 
