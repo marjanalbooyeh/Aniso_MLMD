@@ -139,6 +139,7 @@ class MLTrainer:
             "batch_size": self.batch_size,
             "shrink": self.shrink,
             "lr": self.lr,
+            "in_dim": self.in_dim,
             "hidden_dim": self.hidden_dim,
             "n_layer": self.n_layer,
             "optim": self.optim,
@@ -187,7 +188,7 @@ class MLTrainer:
         tq_x = torch.cross(torque_grad[:, :, 0], R1[:, :, 0])
         tq_y = torch.cross(torque_grad[:, :, 1], R1[:, :, 1])
         tq_z = torch.cross(torque_grad[:, :, 2], R1[:, :, 2])
-        predicted_torque = torch.stack((tq_x, tq_y, tq_z), dim=2)
+        predicted_torque = tq_x + tq_y + tq_z
         return predicted_torque
 
     def _train(self):
@@ -202,6 +203,7 @@ class MLTrainer:
 
             self.optimizer.zero_grad()
             x1.requires_grad = True
+            R1.requires_grad = True
             energy_prediction = self.model(x1, x2, R1, R2)
             if self.prior_energy:
                 prior_energy = self._calculate_prior_energy(x1, x2)
@@ -256,6 +258,7 @@ class MLTrainer:
                 energy) in enumerate(
                 data_loader):
             x1.requires_grad = True
+            R1.requires_grad = True
             energy_prediction = self.model(x1, x2, R1, R2)
             if self.prior_energy:
                 prior_energy = self._calculate_prior_energy(x1, x2)

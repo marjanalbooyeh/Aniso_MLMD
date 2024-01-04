@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
-import rotation_matrix_ops as rmo
+from aniso_MLMD.model.rotation_matrix_ops import dot_product, cross_product, \
+    relative_orientation, rel_pos_orientation, RBF_rel_pos, rot_matrix_to_angle
 
 
 class BasePairNN(nn.Module):
@@ -48,12 +49,12 @@ class BasePairNN(nn.Module):
         dr = dr / R
         inv_r = 1. / R
 
-        orient_dot_prod = rmo.dot_product(R1, R2)
-        orient_cross_prod, orient_cross_prod_norm = rmo.cross_product(R1, R2)
-        rel_orient = rmo.relative_orientation(R1, R2)
-        rel_pos_align, rel_pos_project = rmo.rel_pos_orientation(dr, R1, R2)
-        rbf = rmo.RBF_rel_pos(dr, R1, R2)
-        angle = rmo.rot_matrix_to_angle(rel_orient)
+        orient_dot_prod = dot_product(R1, R2)
+        orient_cross_prod, orient_cross_prod_norm = cross_product(R1, R2)
+        rel_orient = relative_orientation(R1, R2)
+        rel_pos_align, rel_pos_project = rel_pos_orientation(dr, R1, R2)
+        rbf = RBF_rel_pos(dr, R1, R2)
+        angle = rot_matrix_to_angle(rel_orient)
 
         features = torch.cat((R, inv_r, dr, orient_dot_prod,
                               orient_cross_prod.reshape(batch_size, -1),
@@ -116,19 +117,6 @@ class PairNN_Force_Torque(BasePairNN):
 
     def forward(self, x1, x2, R1, R2):
         x = self._prep_features_rot_matrix(x1, x2, R1, R2)
-        energy = self.net(x)
-        force = -torch.autograd.grad(energy.sum(),
-                                     x1,
-                                     create_graph=True)[0]
-        torque = - torch.autograd.grad(energy.sum(),
-                                         R1,
-                                        create_graph=True)[0]
-        tq_x = torch.cross(torque[:, :, 0], R1[:, :, 0])
-        tq_y = torch.cross(torque[:, :, 1], R1[:, :, 1])
-        tq_z = torch.cross(torque[:, :, 2], R1[:, :, 2])
-        torque_out = torch.stack((tq_x, tq_y, tq_z), dim=2)
+        energy = self.energy_net(x)
 
-        return force, torque_out
-
-
-
+        return energy

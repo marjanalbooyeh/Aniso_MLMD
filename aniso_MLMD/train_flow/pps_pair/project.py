@@ -6,7 +6,7 @@ status, execute operations and submit them to a cluster. See also:
 
 from flow import FlowProject, directives
 from flow.environment import DefaultSlurmEnvironment
-from trainer import MLTrainer
+from aniso_MLMD.trainer import MLTrainer
 
 
 class MyProject(FlowProject):

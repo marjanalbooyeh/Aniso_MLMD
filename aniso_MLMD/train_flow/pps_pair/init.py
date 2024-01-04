@@ -32,8 +32,8 @@ def get_parameters():
     parameters["overfit"] = [False]
 
     # model parameters
-    # supported model types: "NN", "NNSkipShared", "NNGrow"
-    parameters["hidden_dim"] = [32, 128]
+    parameters["in_dim"] = [92]
+    parameters["hidden_dim"] = [128, 256]
     parameters["n_layer"] = [3, 5]
     parameters["act_fn"] = ["Tanh"]
     parameters["dropout"] = [0.3]

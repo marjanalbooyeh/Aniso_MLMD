@@ -9,14 +9,15 @@ parameters["tags"] = "random sampling"
 
 # dataset parameters
 parameters["data_path"] = "/home/marjan/Documents/code-base/ml_datasets/pps_pair"
-parameters["batch_size"] = 8
+parameters["batch_size"] = 2
 parameters["shrink"] = False
 parameters["overfit"] = False
 
 # model parameters
 # supported model types: "NN", "NNSkipShared", "NNGrow"
-parameters["hidden_dim"] = 32
-parameters["n_layer"] = 3
+parameters["in_dim"] = 92
+parameters["hidden_dim"] = 10
+parameters["n_layer"] = 2
 parameters["act_fn"] = "Tanh"
 parameters["dropout"] = 0.3
 parameters["batch_norm"] = False
@@ -45,7 +46,7 @@ config = Struct(**parameters)
 
 job_id = 0
 
-from trainer import MLTrainer
+from aniso_MLMD.trainer import MLTrainer
 trainer_obj = MLTrainer(config, job_id)
 trainer_obj.run()
 
