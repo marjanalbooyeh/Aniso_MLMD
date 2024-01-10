@@ -23,7 +23,7 @@ class BasePairNN(nn.Module):
         self.energy_net = self._get_energy_net(self.energy_out_dim)
 
         # initialize weights and biases
-        self.energy_net.apply(self.init_net_weights)
+        #self.energy_net.apply(self.init_net_weights)
 
     def init_net_weights(self, m):
         # todo: add option to initialize uniformly for weights and biases

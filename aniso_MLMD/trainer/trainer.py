@@ -339,11 +339,9 @@ class MLTrainer:
             # if self.use_scheduler:
             #     self.scheduler.step(val_error)
             if epoch % 10 == 0:
-                val_error, val_force_error, val_torque_error = (
-                    self._validation(self.valid_dataloader))
-
+                val_error, val_force_error, val_torque_error = self._validation(self.valid_dataloader, print_output=True)
                 if self.use_scheduler:
-                    self.scheduler.step(val_error)
+                   self.scheduler.step(val_error)
                 print('epoch {}/{}: \n\t train_loss: {}, \n\t val_error: {}'.
                       format(epoch + 1, self.epochs, train_loss, val_error))
 
