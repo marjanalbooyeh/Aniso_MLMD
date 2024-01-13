@@ -1,1 +1,2 @@
 from .trainer_utils import _calculate_torque, _calculate_prior_energy
+from .sim_utils import adjust_periodic_boundary
