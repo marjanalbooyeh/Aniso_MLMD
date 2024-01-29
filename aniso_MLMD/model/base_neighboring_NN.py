@@ -45,8 +45,7 @@ class BaseNeighborNN(nn.Module):
         act = getattr(nn, self.act_fn)
         return act()
 
-    def _prep_features_rot_matrix(self, particle_pos, neighbors_pos, particle_R,
-                                  neighbors_R):
+    def _prep_features_rot_matrix(self, position, orientation_R):
         """
 
         :param particle_x: Particle's position, shape (batch_size, 3)
@@ -56,7 +55,8 @@ class BaseNeighborNN(nn.Module):
 
         """
 
-        batch_size = particle_pos.shape[0]
+        batch_size = position.shape[0]
+
 
         dr = (particle_pos[:, None, :] - neighbors_pos)
         dr = adjust_periodic_boundary(dr, self.box_len)
@@ -112,7 +112,7 @@ class BaseNeighborNN(nn.Module):
 
         return features.to(self.device)
 
-    def forward(self, particle_pos, neighbors_pos, particle_R, neighbors_R):
+    def forward(self, position, orientation_R):
         """
 
         :param particle_pos: Particle's position, shape (batch_size, 3)
@@ -122,8 +122,7 @@ class BaseNeighborNN(nn.Module):
 
         """
 
-        features = self._prep_features_rot_matrix(particle_pos, neighbors_pos,
-                                                  particle_R, neighbors_R)
+        features = self._prep_features_rot_matrix(position, orientation_R)
 
         energy = self.energy_net(features)
         return energy

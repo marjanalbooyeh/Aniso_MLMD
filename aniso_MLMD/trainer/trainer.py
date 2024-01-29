@@ -197,16 +197,16 @@ class MLTrainer:
         running_loss = 0.
         force_running_loss = 0.
         torque_running_loss = 0.
-        for i, ((x1, x2, q1, q2, R1, R2), target_force, target_torque,
+        for i, ((x, q, R), target_force, target_torque,
                 energy) in enumerate(
                 self.train_dataloader):
 
             self.optimizer.zero_grad()
-            x1.requires_grad = True
-            R1.requires_grad = True
-            energy_prediction = self.model(x1, x2, R1, R2)
+            x.requires_grad = True
+            R.requires_grad = True
+            energy_prediction = self.model(x, R)
             if self.prior_energy:
-                prior_energy = self._calculate_prior_energy(x1, x2)
+                prior_energy = self._calculate_prior_energy(x)
                 energy_prediction += prior_energy
             predicted_force = - torch.autograd.grad(energy_prediction.sum(),
                                                     x1,

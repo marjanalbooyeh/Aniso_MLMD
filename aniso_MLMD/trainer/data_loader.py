@@ -8,23 +8,14 @@ from torch.utils.data import Dataset, DataLoader
 
 class CustomTrajDataset(Dataset):
     def __init__(self, traj_df):
-        self.particle_pos = torch.from_numpy(
-            np.array(list(traj_df['particle_pos']))).type(torch.FloatTensor)
-        self.neighbor_pos = torch.from_numpy(
-            np.array(list(traj_df['neighbor_pos']))).type(torch.FloatTensor)
+        self.position = torch.from_numpy(
+            np.array(list(traj_df['position']))).type(torch.FloatTensor)
 
-        self.particle_orient_q = torch.from_numpy(
-            np.array(list(traj_df['particle_orient_q']))).type(
+        self.orientation_q = torch.from_numpy(
+            np.array(list(traj_df['orientation_q']))).type(
             torch.FloatTensor)
-        self.neighbor_orient_q = torch.from_numpy(
-            np.array(list(traj_df['neighbor_orient_q']))).type(
-            torch.FloatTensor)
-
-        self.particle_orient_R = torch.from_numpy(
-            np.array(list(traj_df['particle_orient_R']))).type(
-            torch.FloatTensor)
-        self.neighbor_orient_R = torch.from_numpy(
-            np.array(list(traj_df['neighbor_orient_R']))).type(
+        self.orientation_R = torch.from_numpy(
+            np.array(list(traj_df['orientation_R']))).type(
             torch.FloatTensor)
 
         self.force = torch.from_numpy(np.array(list(traj_df['force']))).type(
@@ -35,14 +26,12 @@ class CustomTrajDataset(Dataset):
             torch.FloatTensor)
 
     def __len__(self):
-        return len(self.particle_pos)
+        return len(self.position)
 
     def __getitem__(self, i):
         return (
-        self.particle_pos[i], self.neighbor_pos[i], self.particle_orient_q[i],
-        self.neighbor_orient_q[i],
-        self.particle_orient_R[i], self.neighbor_orient_R[i]), \
-            self.force[i], self.torque[i], self.energy[i]
+            self.position[i], self.orientation_q[i], self.orientation_R[i]), \
+        self.force[i], self.torque[i], self.energy[i]
 
 
 def _get_data_loader(dataset, batch_size, shuffle=True):
