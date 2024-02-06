@@ -17,6 +17,8 @@ class CustomTrajDataset(Dataset):
         self.orientation_R = torch.from_numpy(
             np.array(list(traj_df['orientation_R']))).type(
             torch.FloatTensor)
+        self.neighbor_list = torch.from_numpy(
+            np.asarray(list(traj_df['neighbor_list'])).astype(np.int64))
 
         self.force = torch.from_numpy(np.array(list(traj_df['force']))).type(
             torch.FloatTensor)
@@ -27,11 +29,11 @@ class CustomTrajDataset(Dataset):
 
     def __len__(self):
         return len(self.position)
-
     def __getitem__(self, i):
         return (
-            self.position[i], self.orientation_q[i], self.orientation_R[i]), \
-        self.force[i], self.torque[i], self.energy[i]
+            self.position[i], self.orientation_q[i], self.orientation_R[i],
+            self.neighbor_list[i]), self.force[i], self.torque[i], self.energy[
+            i]
 
 
 def _get_data_loader(dataset, batch_size, shuffle=True):

@@ -10,12 +10,13 @@ from aniso_MLMD.utils import adjust_periodic_boundary
 
 from .deep_set_layer import DTanh
 
+
 class BaseNeighborNN(nn.Module):
     """Base class for neural networks trained on pair particles."""
 
     def __init__(self, in_dim, hidden_dim, n_layers, box_len, N_neighbors,
                  act_fn="ReLU",
-                 dropout=0.3, batch_norm=True, device=None, pool = 'max1'
+                 dropout=0.3, batch_norm=True, device=None, pool='max1'
                  ):
         super(BaseNeighborNN, self).__init__()
         self.hidden_dim = hidden_dim
@@ -30,7 +31,8 @@ class BaseNeighborNN(nn.Module):
         self.batch_norm = batch_norm
         self.pool = pool
 
-        self.energy_net = DTanh(d_dim=self.hidden_dim, x_dim=self.in_dim, pool=self.pool)
+        self.energy_net = DTanh(d_dim=self.hidden_dim, x_dim=self.in_dim,
+                                pool=self.pool)
 
         # initialize weights and biases
         # self.energy_net.apply(self.init_net_weights)
@@ -45,18 +47,24 @@ class BaseNeighborNN(nn.Module):
         act = getattr(nn, self.act_fn)
         return act()
 
-    def _prep_features_rot_matrix(self, position, orientation_R):
+    def _prep_features_rot_matrix(self, position, orientation_R, neighbor_list):
         """
 
-        :param particle_x: Particle's position, shape (batch_size, 3)
-        :param neighbors_x: Neighbors' positions, shape (batch_size, n_neighbors, 3)
-        :param particle_R: Particle's orientation, shape (batch_size, 3, 3)
-        :param neighbors_R: Neighbors' orientations, shape (batch_size, n_neighbors, 3, 3)
+        Parameters
+        ----------
+        position: particle positions (B, N, 3)
+        orientation_R: particle orientation rotation matrix (B, N, 3, 3)
+        neighbor_list: list of neighbors for each particle (B, N * N_neighbors, 2)
+
+        Returns
+        -------
 
         """
-
         batch_size = position.shape[0]
+        N_particles = position.shape[1]
 
+        neighbor_list = neighbor_list.reshape(batch_size, N_particles, -1,
+                                              neighbor_list.shape[-1])[:, :, :, 1] # (B, N, N_neighbors)
 
         dr = (particle_pos[:, None, :] - neighbors_pos)
         dr = adjust_periodic_boundary(dr, self.box_len)
@@ -108,7 +116,7 @@ class BaseNeighborNN(nn.Module):
                               rbf_neighbor,
                               angle
                               ),
-                             dim=-1) #(B, N, 80)
+                             dim=-1)  # (B, N, 80)
 
         return features.to(self.device)
 

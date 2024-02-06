@@ -1,5 +1,5 @@
 import torch
-import pytorch3d.transforms as p3d
+# import pytorch3d.transforms as p3d
 
 
 def principal_axis_dot_product(R1, R2):
@@ -86,8 +86,9 @@ def RBF_rel_pos(dr, R1, R2):
 def rot_matrix_to_angle(R):
     # R: rotation matrix (Bx 3 x 3)
     # returns: angle in radians (Bx 1)
-    return p3d.matrix_to_euler_angles(R, convention="XYZ")
+    # return p3d.matrix_to_euler_angles(R, convention="XYZ")
 
+    return NotImplementedError
 
 ###########################
 
