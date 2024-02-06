@@ -156,3 +156,5 @@ def RBF_dr_NN(dr, particle_orient_R):
     rbf = torch.exp(-norm_sq)
 
     return rbf
+
+

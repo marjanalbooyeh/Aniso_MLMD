@@ -1,12 +1,6 @@
 import torch
 import torch.nn as nn
-from aniso_MLMD.model.rotation_matrix_ops import (dot_product_NN,
-                                                  element_product_NN,
-                                                  cross_product_principal_axis,
-                                                  relative_orientation_NN,
-                                                  RBF_dr_NN,
-                                                  rot_matrix_to_angle)
-from aniso_MLMD.utils import adjust_periodic_boundary
+import aniso_MLMD.model.neighbor_ops as neighbor_ops
 
 from .deep_set_layer import DTanh
 
@@ -63,49 +57,72 @@ class BaseNeighborNN(nn.Module):
         batch_size = position.shape[0]
         N_particles = position.shape[1]
 
+        # change tuple based neighbor list to (B, N, neighbor_idx)
         neighbor_list = neighbor_list.reshape(batch_size, N_particles, -1,
-                                              neighbor_list.shape[-1])[:, :, :, 1] # (B, N, N_neighbors)
+                                              neighbor_list.shape[-1])[:, :, :,
+                        1]  # (B, N, N_neighbors)
 
-        dr = (particle_pos[:, None, :] - neighbors_pos)
+        dr = neighbors_distance_vector(position,
+                                       neighbor_list)  # (B, N, N_neighbors, 3)
         dr = adjust_periodic_boundary(dr, self.box_len)
-        R = torch.norm(dr, dim=-1, keepdim=True)
-        NN_sorted_indices = torch.argsort(R, dim=-2, descending=False)[:,
-                            :self.N_neighbors, :]
-        sorted_indeces_3D = NN_sorted_indices.broadcast_to(
-            (NN_sorted_indices.shape[0], NN_sorted_indices.shape[1], 3))
-        sorted_indeces_4D = sorted_indeces_3D.unsqueeze(-1).broadcast_to(
-            (sorted_indeces_3D.shape[0], sorted_indeces_3D.shape[1], 3, 3))
 
-        NN_R = torch.gather(R, dim=1, index=NN_sorted_indices)  # (B, N, 1)
-        NN_dr = torch.gather(dr, dim=1, index=sorted_indeces_3D)  # (B, N, 3)
-        NN_dr = NN_dr / NN_R
-        inv_r = 1. / NN_R  # (B, N, 1)
+        R = torch.norm(dr, dim=-1, keepdim=True)  # (B, N, N_neighbors, 1)
 
-        NN_neighbor_orient_R = torch.gather(neighbors_R, dim=1,
-                                            index=sorted_indeces_4D)
+        inv_R = 1. / R  # (B, N, N_neighbors, 1)
 
-        BR_particle_R = particle_R.unsqueeze(1).broadcast_to(
-            (batch_size, self.N_neighbors, 3, 3))
+        ################ orientation related features ################
 
-        # orientation related features
+        # repeat the neighbors idx to match the shape of orientation_R. This
+        # is necessary to gather each particle's neighbors' orientation
+        NN_expanded = neighbor_list[:, :, :, None, None].expand(
+            (-1, -1, -1, 3, 3))  # (B, N, N_neighbors, 3, 3)
+        # repeart the orientation_R to match the shape of neighbor_list
+        orientation_R_expanded = orientation_R[:, :, None, :, :].expand(
+            (-1, -1, N_neighbors, -1, -1))  # (B, N, N_neighbors, 3, 3)
+        # get all neighbors' orientation
+        neighbors_orient_R = torch.gather(orientation_R_expanded, dim=1,
+                                          index=NN_expanded)  # (B, N, N_neighbors, 3, 3)
 
-        orient_dot_prod = dot_product_NN(BR_particle_R,
-                                         NN_neighbor_orient_R)  # (B, N, 3, 3)
-        orient_element_prod = element_product_NN(BR_particle_R,
-                                                 NN_neighbor_orient_R)  # (B, N, 3, 3, 3)
+        # dot product: (B, N, N_neighbors, 3, 3)
+        orient_dot_prod = neighbor_ops.orientation_dot_product(
+            orientation_R_expanded,
+            neighbors_orient_R)
+
+        # element product: (B, N, N_neighbors, 3, 3, 3)
+        orient_element_prod = neighbor_ops.orientation_dot_product(
+            orientation_R_expanded,
+            neighbors_orient_R)
+        # element product norm: (B, N, N_neighbors, 3, 3)
         element_prod_norm = torch.norm(orient_element_prod,
-                                       dim=-1)  # (B, N, 3, 3)
+                                       dim=-1)
 
-        orient_cross_prod = cross_product_principal_axis(BR_particle_R,
-                                                         NN_neighbor_orient_R)  # (B, N, 3, 3)
-        cross_prod_norm = torch.norm(orient_cross_prod, dim=-1)  # (B, N, 3)
-        rel_orient = relative_orientation_NN(BR_particle_R,
-                                             NN_neighbor_orient_R)  # (B, N, 3, 3)
-        rbf_particle = RBF_dr_NN(NN_dr, BR_particle_R)  # (B, N, 3)
-        rbf_neighbor = RBF_dr_NN(NN_dr, NN_neighbor_orient_R)  # (B, N, 3)
-        angle = rot_matrix_to_angle(rel_orient)  # (B, N, 3)
+        # principal cross product: (B, N, N_neighbors, 3, 3)
+        orient_cross_prod = neighbor_ops.orientation_principal_cross_product(
+            orientation_R_expanded,
+            neighbors_orient_R)
+        # cross product norm: (B, N, N_neighbors, 3)
+        cross_prod_norm = torch.norm(orient_cross_prod,
+                                     dim=-1)
 
-        features = torch.cat((NN_R, inv_r, NN_dr,
+        # relative orientation: (B, N, N_neighbors, 3, 3)
+        rel_orient = neighbor_ops.relative_orientation(orientation_R_expanded,
+                                                       neighbors_orient_R)
+
+        ################ RBF features ################
+
+        # RBF for particles:(B, N, N_neighbors, 3)
+        rbf_particle = neighbor_ops.RBF_dr_orientation(dr,
+                                                       orientation_R_expanded)
+        # RBF for neighbors: (B, N, N_neighbors, 3)
+        rbf_neighbors = neighbor_ops.RBF_dr_orientation(dr, neighbors_orient_R)
+
+        # euler angle (B, N, N_neighbors, 3)
+        angle = neighbor_ops.rot_matrix_to_euler_angle(rel_orient)
+
+        # concatenate all features (B, N, N_neighbors, 80)
+        features = torch.cat((R,
+                              dr / R,
+                              inv_R,
                               orient_dot_prod.flatten(start_dim=-2),
                               orient_element_prod.flatten(start_dim=-3),
                               element_prod_norm.flatten(start_dim=-2),
@@ -116,21 +133,31 @@ class BaseNeighborNN(nn.Module):
                               rbf_neighbor,
                               angle
                               ),
-                             dim=-1)  # (B, N, 80)
+                             dim=-1)
 
         return features.to(self.device)
 
-    def forward(self, position, orientation_R):
-        """
 
-        :param particle_pos: Particle's position, shape (batch_size, 3)
-        :param neighbors_pos: Neighbors' positions, shape (batch_size, n_neighbors, 3)
-        :param particle_R: Particle's orientation, shape (batch_size, 3, 3)
-        :param neighbors_R: Neighbors' orientations, shape (batch_size, n_neighbors, 3, 3)
+    def _get_energy_net(self):
+        layers = [nn.Linear(self.in_dim, self.hidden_dim), self._get_act_fn()]
+        for i in range(self.n_layers - 1):
+            layers.append(nn.Linear(self.hidden_dim, self.hidden_dim))
+            if self.batch_norm:
+                layers.append(nn.BatchNorm1d(self.hidden_dim))
+            layers.append(self._get_act_fn())
+            layers.append(nn.Dropout(p=self.dropout))
+        layers.append(nn.Linear(self.hidden_dim, out_dim))
+        return nn.Sequential(*layers)
 
-        """
+    def forward(self, position, orientation_R, neighbor_list):
+        # position: particle positions (B, N, 3)
+        # orientation_R: particle orientation rotation matrix (B, N, 3, 3)
+        # neighbor_list: list of neighbors for each particle
+        # (B, N * N_neighbors, 2)
 
-        features = self._prep_features_rot_matrix(position, orientation_R)
+        # features: (B, N, N_neighbors, 80)
+        features = self._prep_features_rot_matrix(position, orientation_R,
+                                                  neighbor_list)
 
         energy = self.energy_net(features)
         return energy
