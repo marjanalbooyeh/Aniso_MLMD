@@ -81,12 +81,20 @@ class MLTrainer:
 
         # create loss, optimizer and schedule
         if self.loss_type == "mae":
-            self.loss = nn.L1Loss().to(self.device)
+            self.force_loss = nn.L1Loss().to(self.device)
+            self.torque_loss = nn.L1Loss().to(self.device)
+            self.criteria = nn.L1Loss().to(self.device)
         elif self.loss_type == "mse":
-            self.loss = nn.MSELoss().to(self.device)
+            self.force_loss = nn.MSELoss().to(self.device)
+            self.torque_loss = nn.MSELoss().to(self.device)
+            self.criteria = nn.MSELoss().to(self.device)
         elif self.loss_type == "huber":
-            self.loss = nn.HuberLoss(delta=5).to(self.device)
-        self.criteria = nn.L1Loss().to(self.device)
+            self.force_loss = nn.HuberLoss(delta=5).to(self.device)
+            self.torque_loss = nn.HuberLoss(delta=5).to(self.device)
+            self.criteria = nn.HuberLoss(delta=5).to(self.device)
+
+
+
         if self.optim == "Adam":
             self.optimizer = torch.optim.Adam(self.model.parameters(),
                                               lr=self.lr,
@@ -117,20 +125,20 @@ class MLTrainer:
 
     def _create_model(self):
         model = BaseNeighborNN(in_dim=self.in_dim,
-                                    neighbor_hidden_dim=self.neighbor_hidden_dim,
-                                    particle_hidden_dim=self.particle_hidden_dim,
-                                    box_len=self.box_len,
-                                    n_layers=self.n_layer,
-                                    act_fn=self.act_fn,
-                                    dropout=self.dropout,
-                                    batch_norm=self.batch_norm,
-                                    device=self.device,
-                                    neighbor_pool=self.neighbor_pool,
-                                    particle_pool=self.particle_pool,
-                                    prior_energy=self.prior_energy,
-                                    prior_energy_sigma=self.prior_energy_sigma,
-                                    prior_energy_n=self.prior_energy_n
-                                    )
+                               neighbor_hidden_dim=self.neighbor_hidden_dim,
+                               particle_hidden_dim=self.particle_hidden_dim,
+                               box_len=self.box_len,
+                               n_layers=self.n_layer,
+                               act_fn=self.act_fn,
+                               dropout=self.dropout,
+                               batch_norm=self.batch_norm,
+                               device=self.device,
+                               neighbor_pool=self.neighbor_pool,
+                               particle_pool=self.particle_pool,
+                               prior_energy=self.prior_energy,
+                               prior_energy_sigma=self.prior_energy_sigma,
+                               prior_energy_n=self.prior_energy_n
+                               )
         model.to(self.device)
         print(model)
         return model
@@ -213,7 +221,7 @@ class MLTrainer:
         torque_running_loss = 0.
         for i, ((x, q, R, neighbor_list), target_force, target_torque,
                 energy) in enumerate(
-                self.train_dataloader):
+            self.train_dataloader):
 
             self.optimizer.zero_grad()
             x.requires_grad = True
@@ -232,8 +240,8 @@ class MLTrainer:
             target_force = target_force.to(self.device)
             target_torque = target_torque.to(self.device)
 
-            force_loss = self.loss(predicted_force, target_force)
-            torque_loss = self.loss(predicted_torque, target_torque)
+            force_loss = self.force_loss(predicted_force, target_force)
+            torque_loss = self.torque_loss(predicted_torque, target_torque)
             _loss = force_loss + torque_loss
             _loss.backward()
             self.optimizer.step()
@@ -264,9 +272,9 @@ class MLTrainer:
         total_error = 0.
         total_force_error = 0.
         total_torque_error = 0.
-        for i,  ((x, q, R, neighbor_list), target_force, target_torque,
+        for i, ((x, q, R, neighbor_list), target_force, target_torque,
                 energy) in enumerate(
-                data_loader):
+            data_loader):
             x.requires_grad = True
             R.requires_grad = True
             energy_prediction = self.model(x, R, neighbor_list)
@@ -296,7 +304,7 @@ class MLTrainer:
                 print("torque target: ", target_torque[2])
 
         return total_error / (i + 1), total_force_error / (
-                    i + 1), total_torque_error / (i + 1)
+                i + 1), total_torque_error / (i + 1)
 
     def run(self):
         if self.overfit:
@@ -334,8 +342,8 @@ class MLTrainer:
 
     def _run_train_valid(self):
 
-        wandb.watch(models=self.model, criterion=self.loss, log="gradients",
-                    log_freq=2000)
+        wandb.watch(models=self.model, criterion=self.force_loss, log="gradients",
+                    log_freq=200)
         print(
             '**************************Training*******************************')
         self.best_val_error = None
@@ -347,9 +355,10 @@ class MLTrainer:
             # if self.use_scheduler:
             #     self.scheduler.step(val_error)
             if epoch % 10 == 0:
-                val_error, val_force_error, val_torque_error = self._validation(self.valid_dataloader, print_output=False)
+                val_error, val_force_error, val_torque_error = self._validation(
+                    self.valid_dataloader, print_output=True)
                 if self.use_scheduler:
-                   self.scheduler.step(val_error)
+                    self.scheduler.step(val_error)
                 print('epoch {}/{}: \n\t train_loss: {}, \n\t val_error: {}'.
                       format(epoch + 1, self.epochs, train_loss, val_error))
 

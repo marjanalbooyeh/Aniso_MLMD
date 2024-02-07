@@ -33,10 +33,10 @@ class BaseNeighborNN(nn.Module):
         self.prior_energy_sigma = prior_energy_sigma
         self.prior_energy_n = prior_energy_n
 
-        self.neighbors_net = self._neighbors_net()
+        self.neighbors_net = self._neighbors_net().to(self.device)
 
         self.energy_net = DTanh(d_dim=self.particle_hidden_dim, x_dim=self.neighbor_hidden_dim,
-                                pool=self.particle_pool)
+                                pool=self.particle_pool).to(self.device)
 
         # initialize weights and biases
         # self.energy_net.apply(self.init_net_weights)
@@ -186,15 +186,13 @@ class BaseNeighborNN(nn.Module):
                                                   neighbor_list)
         neighbor_features = self.neighbors_net(
             features)  # (B, N, N_neighbors, neighbor_hidden_dim)
-
         # pool over the neighbors dimension
         pooled_features = self._pool_neighbors(
             neighbor_features)  # (B, N, neighbor_hidden_dim)
-
         # deep set layer for particle pooling
         energy = self.energy_net(pooled_features)  # (B, 1)
         if self.prior_energy:
             U_0 = self._calculate_prior_energy()
-            energy = energy + U_0
+            energy = energy + U_0.to(self.device)
 
         return energy
