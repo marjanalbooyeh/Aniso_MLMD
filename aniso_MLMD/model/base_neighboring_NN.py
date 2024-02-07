@@ -157,7 +157,7 @@ class BaseNeighborNN(nn.Module):
                 layers.append(nn.BatchNorm1d(self.neighbor_hidden_dim))
             layers.append(self._get_act_fn())
             layers.append(nn.Dropout(p=self.dropout))
-        layers.append(self._get_act_fn())
+        layers.append(nn.Linear(self.neighbor_hidden_dim, self.neighbor_hidden_dim))
         return nn.Sequential(*layers)
 
     def _pool_neighbors(self, neighbor_features):
