@@ -2,25 +2,30 @@ from collections import OrderedDict
 parameters = OrderedDict()
 
 # project parameters
-parameters["project"] = "pps-pair-Jan4"
+parameters["project"] = "pps-20-new"
 parameters["group"] = "rotation_matrix"
 parameters["notes"] = "Learning pps forces and torques"
 parameters["tags"] = "random sampling"
 
 # dataset parameters
-parameters["data_path"] = "/home/marjan/Documents/code-base/ml_datasets/pps_pair"
+parameters["data_path"] = "/home/marjan/Documents/code-base/ml_datasets/pps_20_new"
 parameters["batch_size"] = 2
 parameters["shrink"] = False
 parameters["overfit"] = False
 
 # model parameters
 # supported model types: "NN", "NNSkipShared", "NNGrow"
-parameters["in_dim"] = 92
-parameters["hidden_dim"] = 10
+parameters["in_dim"] = 80
+parameters["neighbor_hidden_dim"] = 64
+parameters["particle_hidden_dim"] = 64
 parameters["n_layer"] = 2
 parameters["act_fn"] = "Tanh"
 parameters["dropout"] = 0.3
 parameters["batch_norm"] = False
+parameters["neighbor_pool"] = "mean"
+parameters["particle_pool"] = "sum1"
+parameters["box_len"] = 16.17887
+
 
 # optimizer parameters
 parameters["optim"] = "Adam"

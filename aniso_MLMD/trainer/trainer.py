@@ -3,7 +3,7 @@ import torch.nn as nn
 import wandb
 
 from aniso_MLMD.trainer.data_loader import load_datasets, load_overfit_data
-from aniso_MLMD.model import PairNN_Force_Torque
+from aniso_MLMD.model import BaseNeighborNN
 
 
 class MLTrainer:
@@ -24,11 +24,15 @@ class MLTrainer:
 
         # model parameters
         self.in_dim = config.in_dim
-        self.hidden_dim = config.hidden_dim
+        self.neighbor_hidden_dim = config.neighbor_hidden_dim
+        self.particle_hidden_dim = config.particle_hidden_dim
         self.n_layer = config.n_layer
         self.act_fn = config.act_fn
         self.dropout = config.dropout
         self.batch_norm = config.batch_norm
+        self.neighbor_pool = config.neighbor_pool
+        self.particle_pool = config.particle_pool
+        self.box_len = config.box_len
 
         # optimizer parameters
         self.optim = config.optim
@@ -112,13 +116,20 @@ class MLTrainer:
                                                              verbose=True)
 
     def _create_model(self):
-        model = PairNN_Force_Torque(in_dim=self.in_dim,
-                                    hidden_dim=self.hidden_dim,
+        model = BaseNeighborNN(in_dim=self.in_dim,
+                                    neighbor_hidden_dim=self.neighbor_hidden_dim,
+                                    particle_hidden_dim=self.particle_hidden_dim,
+                                    box_len=self.box_len,
                                     n_layers=self.n_layer,
                                     act_fn=self.act_fn,
                                     dropout=self.dropout,
                                     batch_norm=self.batch_norm,
-                                    device=self.device
+                                    device=self.device,
+                                    neighbor_pool=self.neighbor_pool,
+                                    particle_pool=self.particle_pool,
+                                    prior_energy=self.prior_energy,
+                                    prior_energy_sigma=self.prior_energy_sigma,
+                                    prior_energy_n=self.prior_energy_n
                                     )
         model.to(self.device)
         print(model)
@@ -140,8 +151,11 @@ class MLTrainer:
             "shrink": self.shrink,
             "lr": self.lr,
             "in_dim": self.in_dim,
-            "hidden_dim": self.hidden_dim,
+            "neighbor_hidden_dim": self.neighbor_hidden_dim,
+            "particle_hidden_dim": self.particle_hidden_dim,
             "n_layer": self.n_layer,
+            "neighbor_pool": self.neighbor_pool,
+            "particle_pool": self.particle_pool,
             "optim": self.optim,
             "decay": self.decay,
             "act_fn": self.act_fn,
@@ -197,26 +211,23 @@ class MLTrainer:
         running_loss = 0.
         force_running_loss = 0.
         torque_running_loss = 0.
-        for i, ((x, q, R), target_force, target_torque,
+        for i, ((x, q, R, neighbor_list), target_force, target_torque,
                 energy) in enumerate(
                 self.train_dataloader):
 
             self.optimizer.zero_grad()
             x.requires_grad = True
             R.requires_grad = True
-            energy_prediction = self.model(x, R)
-            if self.prior_energy:
-                prior_energy = self._calculate_prior_energy(x)
-                energy_prediction += prior_energy
+            energy_prediction = self.model(x, R, neighbor_list)
             predicted_force = - torch.autograd.grad(energy_prediction.sum(),
-                                                    x1,
+                                                    x,
                                                     create_graph=True)[0].to(
                 self.device)
             torque_grad = - torch.autograd.grad(energy_prediction.sum(),
-                                                R1,
+                                                R,
                                                 create_graph=True)[0]
 
-            predicted_torque = self._calculate_torque(torque_grad, R1)
+            predicted_torque = self._calculate_torque(torque_grad, R)
 
             target_force = target_force.to(self.device)
             target_torque = target_torque.to(self.device)
@@ -253,24 +264,21 @@ class MLTrainer:
         total_error = 0.
         total_force_error = 0.
         total_torque_error = 0.
-        for i, ((x1, x2, q1, q2, R1, R2), target_force, target_torque,
+        for i,  ((x, q, R, neighbor_list), target_force, target_torque,
                 energy) in enumerate(
                 data_loader):
-            x1.requires_grad = True
-            R1.requires_grad = True
-            energy_prediction = self.model(x1, x2, R1, R2)
-            if self.prior_energy:
-                prior_energy = self._calculate_prior_energy(x1, x2)
-                energy_prediction += prior_energy
+            x.requires_grad = True
+            R.requires_grad = True
+            energy_prediction = self.model(x, R, neighbor_list)
             predicted_force = - torch.autograd.grad(energy_prediction.sum(),
-                                                    x1,
+                                                    x,
                                                     create_graph=True)[0].to(
                 self.device)
             torque_grad = - torch.autograd.grad(energy_prediction.sum(),
-                                                R1,
+                                                R,
                                                 create_graph=True)[0]
 
-            predicted_torque = self._calculate_torque(torque_grad, R1)
+            predicted_torque = self._calculate_torque(torque_grad, R)
 
             target_force = target_force.to(self.device)
             target_torque = target_torque.to(self.device)
@@ -339,7 +347,7 @@ class MLTrainer:
             # if self.use_scheduler:
             #     self.scheduler.step(val_error)
             if epoch % 10 == 0:
-                val_error, val_force_error, val_torque_error = self._validation(self.valid_dataloader, print_output=True)
+                val_error, val_force_error, val_torque_error = self._validation(self.valid_dataloader, print_output=False)
                 if self.use_scheduler:
                    self.scheduler.step(val_error)
                 print('epoch {}/{}: \n\t train_loss: {}, \n\t val_error: {}'.

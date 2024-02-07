@@ -38,7 +38,7 @@ class CustomTrajDataset(Dataset):
 
 def _get_data_loader(dataset, batch_size, shuffle=True):
     dataloader = DataLoader(dataset=dataset, batch_size=batch_size,
-                            shuffle=shuffle, num_workers=5)
+                            shuffle=shuffle, num_workers=1)
     return dataloader
 
 
