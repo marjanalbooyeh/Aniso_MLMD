@@ -11,13 +11,8 @@ class PermEqui1_max(nn.Module):
     self.Gamma = nn.Linear(in_dim, out_dim)
 
   def forward(self, x):
-    # print('.....PermEqui1_max.....')
-    # print('x shape: ', x.shape)
     xm, _ = x.max(1, keepdim=True)
-    # print('xm shape: ', xm.shape)
     x = self.Gamma(x-xm)
-    # print('out_shape: ', x.shape)
-    print('........................')
     return x
 
 class PermEqui1_mean(nn.Module):
@@ -29,6 +24,17 @@ class PermEqui1_mean(nn.Module):
     xm = x.mean(1, keepdim=True)
     x = self.Gamma(x-xm)
     return x
+
+class PermEqui1_sum(nn.Module):
+  def __init__(self, in_dim, out_dim):
+    super(PermEqui1_sum, self).__init__()
+    self.Gamma = nn.Linear(in_dim, out_dim)
+
+  def forward(self, x):
+    xm = x.sum(1, keepdim=True)
+    x = self.Gamma(x-xm)
+    return x
+
 
 class PermEqui2_max(nn.Module):
   def __init__(self, in_dim, out_dim):
@@ -55,6 +61,20 @@ class PermEqui2_mean(nn.Module):
     x = self.Gamma(x)
     x = x - xm
     return x
+
+
+class PermEqui2_sum(nn.Module):
+    def __init__(self, in_dim, out_dim):
+        super(PermEqui2_sum, self).__init__()
+        self.Gamma = nn.Linear(in_dim, out_dim)
+        self.Lambda = nn.Linear(in_dim, out_dim, bias=False)
+
+    def forward(self, x):
+        xm = x.sum(1, keepdim=True)
+        xm = self.Lambda(xm)
+        x = self.Gamma(x)
+        x = x - xm
+        return x
 
 
 class D(nn.Module):
@@ -99,6 +119,24 @@ class D(nn.Module):
           nn.ELU(inplace=True),
           PermEqui1_mean(self.d_dim, self.d_dim),
           nn.ELU(inplace=True),
+        )
+    elif pool == "sum":
+        self.phi = nn.Sequential(
+            PermEqui2_sum(self.x_dim, self.d_dim),
+            nn.ELU(inplace=True),
+            PermEqui2_sum(self.d_dim, self.d_dim),
+            nn.ELU(inplace=True),
+            PermEqui2_sum(self.d_dim, self.d_dim),
+            nn.ELU(inplace=True),
+        )
+    elif pool == "sum1":
+        self.phi = nn.Sequential(
+            PermEqui1_sum(self.x_dim, self.d_dim),
+            nn.ELU(inplace=True),
+            PermEqui1_sum(self.d_dim, self.d_dim),
+            nn.ELU(inplace=True),
+            PermEqui1_sum(self.d_dim, self.d_dim),
+            nn.ELU(inplace=True),
         )
 
     self.ro = nn.Sequential(
@@ -165,6 +203,24 @@ class DTanh(nn.Module):
           PermEqui1_mean(self.d_dim, self.d_dim),
           nn.Tanh(),
         )
+    elif pool == "sum":
+        self.phi = nn.Sequential(
+            PermEqui2_sum(self.x_dim, self.d_dim),
+            nn.Tanh(),
+            PermEqui2_sum(self.d_dim, self.d_dim),
+            nn.Tanh(),
+            PermEqui2_sum(self.d_dim, self.d_dim),
+            nn.Tanh(),
+        )
+    elif pool == "sum1":
+        self.phi = nn.Sequential(
+            PermEqui1_sum(self.x_dim, self.d_dim),
+            nn.Tanh(),
+            PermEqui1_sum(self.d_dim, self.d_dim),
+            nn.Tanh(),
+            PermEqui1_sum(self.d_dim, self.d_dim),
+            nn.Tanh(),
+        )
 
     self.ro = nn.Sequential(
        nn.Dropout(p=0.5),
@@ -177,14 +233,9 @@ class DTanh(nn.Module):
 
   def forward(self, x):
 
-    # print('****** Dtanh *******')
-    # print('input_shape: ', x.shape)
     phi_output = self.phi(x)
-    # print('phi_output : ', phi_output.shape)
     sum_output, _ = phi_output.max(1)
-    # print('sum_output:', sum_output.shape)
     ro_output = self.ro(sum_output)
-    # print('ro_output: ', ro_output.shape)
     return ro_output
 
 def clip_grad(model, max_norm):
