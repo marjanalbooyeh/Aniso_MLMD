@@ -34,9 +34,9 @@ class BaseNeighborNN(nn.Module):
         self.prior_energy_n = prior_energy_n
 
         self.neighbors_net = self._neighbors_net().to(self.device)
-
-        self.energy_net = DTanh(d_dim=self.particle_hidden_dim, x_dim=self.neighbor_hidden_dim,
-                                pool=self.particle_pool).to(self.device)
+        self.energy_net = self._particle_net().to(self.device)
+        # self.energy_net = DTanh(d_dim=self.particle_hidden_dim, x_dim=self.neighbor_hidden_dim,
+        #                         pool=self.particle_pool).to(self.device)
 
         # initialize weights and biases
         # self.energy_net.apply(self.init_net_weights)
@@ -157,8 +157,22 @@ class BaseNeighborNN(nn.Module):
                 layers.append(nn.BatchNorm1d(self.neighbor_hidden_dim))
             layers.append(self._get_act_fn())
             layers.append(nn.Dropout(p=self.dropout))
-        layers.append(self._get_act_fn())
+        layers.append(nn.Linear(self.neighbor_hidden_dim, self.neighbor_hidden_dim))
         return nn.Sequential(*layers)
+
+    def _particle_net(self):
+        layers = [nn.Linear(self.neighbor_hidden_dim, self.particle_hidden_dim),
+                  self._get_act_fn()]
+        for i in range(self.n_layers - 1):
+            layers.append(
+                nn.Linear(self.particle_hidden_dim, self.particle_hidden_dim))
+            if self.batch_norm:
+                layers.append(nn.BatchNorm1d(self.particle_hidden_dim))
+            layers.append(self._get_act_fn())
+            layers.append(nn.Dropout(p=self.dropout))
+        layers.append(nn.Linear(self.particle_hidden_dim, 1))
+        return nn.Sequential(*layers)
+
 
     def _pool_neighbors(self, neighbor_features):
         # neighbor_features: (B, N, N_neighbors, hidden_dim)
@@ -170,6 +184,17 @@ class BaseNeighborNN(nn.Module):
             return neighbor_features.sum(dim=2)
         else:
             raise ValueError('Invalid neighbor pooling method')
+
+    def _pool_particles(self, particle_features):
+        # particle_features: (B, N, hidden_dim)
+        if self.particle_pool == 'mean':
+            return particle_features.mean(dim=1)
+        elif self.particle_pool == 'max':
+            return particle_features.max(dim=1)
+        elif self.particle_pool == 'sum':
+            return particle_features.sum(dim=1)
+        else:
+            raise ValueError('Invalid particle pooling method')
 
     def _calculate_prior_energy(self):
         U_0 = torch.pow(self.prior_energy_sigma / self.R, self.prior_energy_n)
@@ -190,7 +215,7 @@ class BaseNeighborNN(nn.Module):
         pooled_features = self._pool_neighbors(
             neighbor_features)  # (B, N, neighbor_hidden_dim)
         # deep set layer for particle pooling
-        energy = self.energy_net(pooled_features)  # (B, 1)
+        energy = self._pool_particles(self.energy_net(pooled_features))  # (B, 1)
         if self.prior_energy:
             U_0 = self._calculate_prior_energy()
             energy = energy + U_0.to(self.device)
