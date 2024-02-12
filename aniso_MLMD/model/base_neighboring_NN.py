@@ -165,7 +165,7 @@ class BaseNeighborNN(nn.Module):
         if self.neighbor_pool == 'mean':
             return neighbor_features.mean(dim=2)
         elif self.neighbor_pool == 'max':
-            return neighbor_features.max(dim=2)
+            return neighbor_features.max(dim=2)[0]
         elif self.neighbor_pool == 'sum':
             return neighbor_features.sum(dim=2)
         else:
