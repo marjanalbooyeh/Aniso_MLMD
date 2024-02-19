@@ -162,10 +162,11 @@ class D(nn.Module):
 
 class DTanh(nn.Module):
 
-  def __init__(self, d_dim, x_dim=80, pool = 'mean'):
+  def __init__(self, d_dim, x_dim=80, pool = 'mean', dropout=0.5):
     super(DTanh, self).__init__()
     self.d_dim = d_dim
     self.x_dim = x_dim
+    self.dropout = dropout
 
     if pool == 'max':
         self.phi = nn.Sequential(
@@ -223,13 +224,12 @@ class DTanh(nn.Module):
         )
 
     self.ro = nn.Sequential(
-       nn.Dropout(p=0.5),
+       nn.Dropout(p=self.dropout),
        nn.Linear(self.d_dim, self.d_dim),
        nn.Tanh(),
-       nn.Dropout(p=0.5),
+       nn.Dropout(p=self.dropout),
        nn.Linear(self.d_dim, 1),
     )
-    print(self)
 
   def forward(self, x):
 

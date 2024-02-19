@@ -36,7 +36,7 @@ class BaseNeighborNN(nn.Module):
         self.neighbors_net = self._neighbors_net().to(self.device)
 
         self.energy_net = DTanh(d_dim=self.particle_hidden_dim, x_dim=self.neighbor_hidden_dim,
-                                pool=self.particle_pool).to(self.device)
+                                pool=self.particle_pool, dropout=self.dropout).to(self.device)
 
         # initialize weights and biases
         # self.energy_net.apply(self.init_net_weights)
