@@ -15,6 +15,7 @@ class MLTrainer:
         self.group = config.group
         self.notes = config.notes
         self.tags = config.tags
+        self.log = config.log
 
         # dataset parameters
         self.data_path = config.data_path
@@ -184,19 +185,20 @@ class MLTrainer:
         return config
 
     def _initiate_wandb_run(self):
-        self.wandb_config = self._create_config()
-
-        self.wandb_run = wandb.init(project=self.project, notes=self.notes,
-                                    group=self.group,
-                                    tags=self.tags, config=self.wandb_config)
-        self.wandb_run_name = self.wandb_run.name
-        self.wandb_run_path = self.wandb_run.path
-        self.wandb_run.summary["job_id"] = self.job_id
-        self.wandb_run.summary["data_path"] = self.data_path
-        self.wandb_run.summary["in_dim"] = self.in_dim
-        self.wandb_run.summary["train_size"] = self.train_size
-        self.wandb_run.summary["valid_size"] = self.valid_size
-        self.wandb_run.summary["test_size"] = self.test_size
+        if self.log:
+            self.wandb_config = self._create_config()
+    
+            self.wandb_run = wandb.init(project=self.project, notes=self.notes,
+                                        group=self.group,
+                                        tags=self.tags, config=self.wandb_config)
+            self.wandb_run_name = self.wandb_run.name
+            self.wandb_run_path = self.wandb_run.path
+            self.wandb_run.summary["job_id"] = self.job_id
+            self.wandb_run.summary["data_path"] = self.data_path
+            self.wandb_run.summary["in_dim"] = self.in_dim
+            self.wandb_run.summary["train_size"] = self.train_size
+            self.wandb_run.summary["valid_size"] = self.valid_size
+            self.wandb_run.summary["test_size"] = self.test_size
 
     def _calculate_prior_energy(self, x1, x2):
         dr = x1 - x2
@@ -268,11 +270,20 @@ class MLTrainer:
             self.optimizer.step()
 
             if i % 100 == 99:
-                wandb.log({'running_loss': running_loss / 99.,
-                           'force_running_loss': force_running_loss / 99.,
-                           'torque_running_loss': torque_running_loss / 99.,
-                           "learning rate": self.optimizer.param_groups[0][
-                               'lr']})
+                if self.log:
+                    wandb.log({'running_loss': running_loss / 99.,
+                               'force_running_loss': force_running_loss / 99.,
+                               'torque_running_loss': torque_running_loss / 99.,
+                               "learning rate": self.optimizer.param_groups[0][
+                                   'lr']})
+                print('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$')
+                print('running_loss: ', running_loss / 99.)
+                print("force prediction: ", predicted_force[5][:10])
+                print("force target: ", target_force[5][:10])
+                print("torque prediction: ", predicted_torque[5][:10])
+                print("torque target: ", target_torque[5][:10])
+               
+                    
                 running_loss = 0.0
                 force_running_loss = 0.0
                 torque_running_loss = 0.0
@@ -322,6 +333,7 @@ class MLTrainer:
                 print("force target: ", target_force[5][:10])
                 print("torque prediction: ", predicted_torque[5][:10])
                 print("torque target: ", target_torque[5][:10])
+                print('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$')
 
         return total_error / (i + 1), total_force_error / (
                 i + 1), total_torque_error / (i + 1)
@@ -333,8 +345,9 @@ class MLTrainer:
             self._run_train_valid()
 
     def _run_overfit(self):
-        wandb.watch(models=self.model, criterion=self.force_loss, log="gradients",
-                    log_freq=200)
+        if self.log:
+            wandb.watch(models=self.model, criterion=self.force_loss, log="gradients",
+                        log_freq=200)
         print(
             '**************************Overfitting*******************************')
 
@@ -351,8 +364,8 @@ class MLTrainer:
 
                 # wandb.log({'train_loss': train_loss,
                 #            "learning rate": self.optimizer.param_groups[0]['lr']})
-
-        wandb.finish()
+        if self.log:
+            wandb.finish()
         checkpoint = {
             'epoch': epoch,
             'model': self.model.state_dict(),
@@ -361,9 +374,9 @@ class MLTrainer:
         torch.save(checkpoint, 'last_checkpoint.pth')
 
     def _run_train_valid(self):
-
-        wandb.watch(models=self.model, criterion=self.force_loss, log="gradients",
-                    log_freq=200)
+        if self.log:
+            wandb.watch(models=self.model, criterion=self.force_loss, log="gradients",
+                        log_freq=200)
         print(
             '**************************Training*******************************')
         self.best_val_error = None
@@ -381,13 +394,13 @@ class MLTrainer:
                     self.scheduler.step(val_error)
                 print('epoch {}/{}: \n\t train_loss: {}, \n\t val_error: {}'.
                       format(epoch + 1, self.epochs, train_loss, val_error))
-
-                wandb.log({'train_loss': train_loss,
-                           'valid error': val_error,
-                           'valid force error': val_force_error,
-                           'valid torque error': val_torque_error,
-                           "learning rate": self.optimizer.param_groups[0][
-                               'lr']})
+                if self.log:
+                    wandb.log({'train_loss': train_loss,
+                               'valid error': val_error,
+                               'valid force error': val_force_error,
+                               'valid torque error': val_torque_error,
+                               "learning rate": self.optimizer.param_groups[0][
+                                   'lr']})
 
                 if self.best_val_error is None:
                     self.best_val_error = val_error
@@ -406,9 +419,10 @@ class MLTrainer:
                         self.best_val_error, epoch))
                     print(
                         '#################################################################')
-                    self.wandb_run.summary["best_epoch"] = epoch + 1
-                    self.wandb_run.summary[
-                        "best_val_error"] = self.best_val_error
+                    if self.log:
+                        self.wandb_run.summary["best_epoch"] = epoch + 1
+                        self.wandb_run.summary[
+                            "best_val_error"] = self.best_val_error
 
         # Testing
         print(
@@ -418,9 +432,9 @@ class MLTrainer:
             print_output=True)
         print('Testing \n\t test error: {}'.
               format(self.test_error))
-
-        self.wandb_run.summary['test error'] = self.test_error
-        wandb.finish()
+        if self.log:
+            self.wandb_run.summary['test error'] = self.test_error
+            wandb.finish()
         checkpoint = {
             'epoch': epoch,
             'model': self.model.state_dict(),
