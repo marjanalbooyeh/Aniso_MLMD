@@ -45,7 +45,7 @@ def _get_data_loader(dataset, batch_size, shuffle=True):
 def load_datasets(data_path, batch_size, shrink=False):
     train_df = pd.read_pickle(os.path.join(data_path, 'train.pkl'))
     if shrink:
-        train_df = train_df.sample(frac=0.005).reset_index(drop=True)
+        train_df = train_df.sample(frac=0.1).reset_index(drop=True)
         print("Training dataset shrunk to ", train_df.shape)
     val_df = pd.read_pickle(os.path.join(data_path, 'val.pkl'))
     test_df = pd.read_pickle(os.path.join(data_path, 'test.pkl'))
@@ -64,7 +64,7 @@ def load_datasets(data_path, batch_size, shrink=False):
 
 
 def load_overfit_data(data_path, batch_size):
-    train_df = pd.read_pickle(data_path)
+    train_df = pd.read_pickle(os.path.join(data_path, 'train.pkl'))
     train_dataset = CustomTrajDataset(train_df)
     train_dataloader = _get_data_loader(dataset=train_dataset,
                                         batch_size=batch_size, shuffle=True)
