@@ -70,7 +70,7 @@ class BaseNeighborNN(nn.Module):
         # change tuple based neighbor list to (B, N, neighbor_idx)
         neighbor_list = neighbor_list.reshape(batch_size, N_particles, -1,
                                               neighbor_list.shape[-1])[:, :, :,
-                        1]  # (B, N, N_neighbors)
+                        1].to(self.device)  # (B, N, N_neighbors)
         N_neighbors = neighbor_list.shape[-1]
         dr = neighbor_ops.neighbors_distance_vector(position,
                                                     neighbor_list)  # (B, N, N_neighbors, 3)
@@ -168,6 +168,17 @@ class BaseNeighborNN(nn.Module):
             return neighbor_features.max(dim=2)[0]
         elif self.neighbor_pool == 'sum':
             return neighbor_features.sum(dim=2)
+        else:
+            raise ValueError('Invalid neighbor pooling method')
+
+    def _pool_particles(self, pooled_features):
+        # pooled_features: (B, N, neighbor_hidden_dim)
+        if self.particle_pool == 'mean':
+            return pooled_features.mean(dim=1)
+        elif self.particle_pool == 'max':
+            return pooled_features.max(dim=1)[0]
+        elif self.particle_pool == 'sum':
+            return pooled_features.sum(dim=1)
         else:
             raise ValueError('Invalid neighbor pooling method')
 

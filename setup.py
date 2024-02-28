@@ -99,7 +99,8 @@ setup(
     url=URL,
     packages=find_packages(exclude=('tests', 'docs',)),
     package_data = {"aniso_MLMD":
-                    other_files},
+                    other_files,
+                    "iso_MLMD": other_files},
     install_requires=REQUIRED,
     include_package_data=True,
     license='MIT',

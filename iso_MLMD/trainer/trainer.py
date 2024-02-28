@@ -2,11 +2,10 @@ import torch
 import torch.nn as nn
 import wandb
 
-from aniso_MLMD.trainer.data_loader import load_datasets, load_overfit_data
-from aniso_MLMD.model import BaseNeighborNN
+from iso_MLMD.trainer import BasePairNN, load_datasets, load_overfit_data
 
 
-class MLTrainer:
+class IsoTrainer:
     def __init__(self, config, job_id, resume=False):
         print("***************CUDA: ", torch.cuda.is_available())
         self.resume = resume
@@ -15,7 +14,7 @@ class MLTrainer:
         self.group = config.group
         self.notes = config.notes
         self.tags = config.tags
-        self.log = config.log
+        self.wandb_log = config.wandb_log
 
         # dataset parameters
         self.data_path = config.data_path
@@ -25,15 +24,11 @@ class MLTrainer:
 
         # model parameters
         self.in_dim = config.in_dim
-        self.neighbor_hidden_dim = config.neighbor_hidden_dim
-        self.particle_hidden_dim = config.particle_hidden_dim
+        self.hidden_dim = config.hidden_dim
         self.n_layer = config.n_layer
         self.act_fn = config.act_fn
         self.dropout = config.dropout
         self.batch_norm = config.batch_norm
-        self.neighbor_pool = config.neighbor_pool
-        self.particle_pool = config.particle_pool
-        self.box_len = config.box_len
 
         # optimizer parameters
         self.optim = config.optim
@@ -83,18 +78,13 @@ class MLTrainer:
         # create loss, optimizer and schedule
         if self.loss_type == "mae":
             self.force_loss = nn.L1Loss().to(self.device)
-            self.torque_loss = nn.L1Loss().to(self.device)
             self.criteria = nn.L1Loss().to(self.device)
         elif self.loss_type == "mse":
             self.force_loss = nn.MSELoss().to(self.device)
-            self.torque_loss = nn.MSELoss().to(self.device)
             self.criteria = nn.MSELoss().to(self.device)
         elif self.loss_type == "huber":
             self.force_loss = nn.HuberLoss(delta=5).to(self.device)
-            self.torque_loss = nn.HuberLoss(delta=5).to(self.device)
             self.criteria = nn.HuberLoss(delta=5).to(self.device)
-
-
 
         if self.optim == "Adam":
             self.optimizer = torch.optim.Adam(self.model.parameters(),
@@ -111,7 +101,8 @@ class MLTrainer:
             self.load_last_state()
 
         self.wandb_config = self._create_config()
-        self._initiate_wandb_run()
+        if self.wandb_log:
+            self._initiate_wandb_run()
 
     def set_scheduler(self):
         if self.scheduler_type == "ReduceLROnPlateau":
@@ -125,21 +116,17 @@ class MLTrainer:
                                                              verbose=True)
 
     def _create_model(self):
-        model = BaseNeighborNN(in_dim=self.in_dim,
-                               neighbor_hidden_dim=self.neighbor_hidden_dim,
-                               particle_hidden_dim=self.particle_hidden_dim,
-                               box_len=self.box_len,
-                               n_layers=self.n_layer,
-                               act_fn=self.act_fn,
-                               dropout=self.dropout,
-                               batch_norm=self.batch_norm,
-                               device=self.device,
-                               neighbor_pool=self.neighbor_pool,
-                               particle_pool=self.particle_pool,
-                               prior_energy=self.prior_energy,
-                               prior_energy_sigma=self.prior_energy_sigma,
-                               prior_energy_n=self.prior_energy_n
-                               )
+        model = BasePairNN(in_dim=self.in_dim,
+                           hidden_dim=self.hidden_dim,
+                           n_layers=self.n_layer,
+                           act_fn=self.act_fn,
+                           dropout=self.dropout,
+                           batch_norm=self.batch_norm,
+                           device=self.device,
+                           prior_energy=self.prior_energy,
+                           prior_energy_sigma=self.prior_energy_sigma,
+                           prior_energy_n=self.prior_energy_n
+                           )
         model.to(self.device)
         print(model)
         return model
@@ -160,11 +147,8 @@ class MLTrainer:
             "shrink": self.shrink,
             "lr": self.lr,
             "in_dim": self.in_dim,
-            "neighbor_hidden_dim": self.neighbor_hidden_dim,
-            "particle_hidden_dim": self.particle_hidden_dim,
+            "hidden_dim": self.hidden_dim,
             "n_layer": self.n_layer,
-            "neighbor_pool": self.neighbor_pool,
-            "particle_pool": self.particle_pool,
             "optim": self.optim,
             "decay": self.decay,
             "act_fn": self.act_fn,
@@ -185,35 +169,20 @@ class MLTrainer:
         return config
 
     def _initiate_wandb_run(self):
-        if self.log:
-            self.wandb_config = self._create_config()
-    
-            self.wandb_run = wandb.init(project=self.project, notes=self.notes,
-                                        group=self.group,
-                                        tags=self.tags, config=self.wandb_config)
-            self.wandb_run_name = self.wandb_run.name
-            self.wandb_run_path = self.wandb_run.path
-            self.wandb_run.summary["job_id"] = self.job_id
-            self.wandb_run.summary["data_path"] = self.data_path
-            self.wandb_run.summary["in_dim"] = self.in_dim
-            self.wandb_run.summary["train_size"] = self.train_size
-            self.wandb_run.summary["valid_size"] = self.valid_size
-            self.wandb_run.summary["test_size"] = self.test_size
+        self.wandb_config = self._create_config()
 
-    def _calculate_prior_energy(self, x1, x2):
-        dr = x1 - x2
-        r = torch.norm(dr, dim=1, keepdim=True)
-        U_0 = torch.pow(self.prior_energy_sigma / r, self.prior_energy_n).to(
-            self.device)
-        return U_0
+        self.wandb_run = wandb.init(project=self.project, notes=self.notes,
+                                    group=self.group,
+                                    tags=self.tags, config=self.wandb_config)
+        self.wandb_run_name = self.wandb_run.name
+        self.wandb_run_path = self.wandb_run.path
+        self.wandb_run.summary["job_id"] = self.job_id
+        self.wandb_run.summary["data_path"] = self.data_path
+        self.wandb_run.summary["in_dim"] = self.in_dim
+        self.wandb_run.summary["train_size"] = self.train_size
+        self.wandb_run.summary["valid_size"] = self.valid_size
+        self.wandb_run.summary["test_size"] = self.test_size
 
-    def _calculate_torque(self, torque_grad, R1):
-
-        tq_x = torch.cross(torque_grad[:, :, :, 0], R1[:, :, :, 0])
-        tq_y = torch.cross(torque_grad[:, :, :, 1], R1[:, :, :, 1])
-        tq_z = torch.cross(torque_grad[:, :, :, 2], R1[:, :, :, 2])
-        predicted_torque = tq_x + tq_y + tq_z
-        return predicted_torque.to(self.device)
 
     def clip_grad(self, model, max_norm):
         total_norm = 0
@@ -231,116 +200,62 @@ class MLTrainer:
         self.model.train()
         train_loss = 0.
         running_loss = 0.
-        force_running_loss = 0.
-        torque_running_loss = 0.
-        for i, ((positions, orientation_q, orientation_R, neighbor_list), target_force, target_torque,
-                energy) in enumerate(
+        for i, (dr, force, energy) in enumerate(
             self.train_dataloader):
 
             self.optimizer.zero_grad()
-            positions.requires_grad = True
-            orientation_R.requires_grad = True
-            positions = positions.to(self.device)
-            orientation_R = orientation_R.to(self.device)
+            dr.requires_grad = True
+            dr = dr.to(self.device)
 
-            
-            energy_prediction = self.model(positions, orientation_R, neighbor_list)
-            predicted_force = - torch.autograd.grad(energy_prediction.sum(),
-                                                    positions,
-                                                    create_graph=True)[0].to(
-                self.device)
-            torque_grad = - torch.autograd.grad(energy_prediction.sum(),
-                                                orientation_R,
-                                                create_graph=True)[0]
+            predicted_pair_force = self.model(dr)
+            target_force = force.to(self.device)
 
-            predicted_torque = self._calculate_torque(torque_grad, orientation_R)
+            force_loss = self.force_loss(predicted_pair_force, target_force)
+            train_loss += force_loss.item()
+            running_loss += force_loss.item()
+            force_loss.backward()
 
-            target_force = target_force.to(self.device)
-            target_torque = target_torque.to(self.device)
-
-            force_loss = self.force_loss(predicted_force, target_force)
-            torque_loss = self.torque_loss(predicted_torque, target_torque)
-            _loss = force_loss + torque_loss
-            
-            train_loss += _loss
-            running_loss += _loss.item()
-            force_running_loss += force_loss.item()
-            torque_running_loss += torque_loss.item()
-            
-            _loss.backward()
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), 5)
             self.optimizer.step()
 
-            if i % 100 == 99:
-                if self.log:
-                    wandb.log({'running_loss': running_loss / 99.,
-                               'force_running_loss': force_running_loss / 99.,
-                               'torque_running_loss': torque_running_loss / 99.,
+            if i % 10 == 9:
+                if self.wandb_log:
+                    wandb.log({'running_loss': running_loss / 9.,
                                "learning rate": self.optimizer.param_groups[0][
                                    'lr']})
-                print('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$')
-                print('running_loss: ', running_loss / 99.)
-                print("force prediction: ", predicted_force[5][:10])
-                print("force target: ", target_force[5][:10])
-                print("torque prediction: ", predicted_torque[5][:10])
-                print("torque target: ", target_torque[5][:10])
-               
-                    
+                print('running_loss: {}'.format(running_loss / 9.))
+
                 running_loss = 0.0
                 force_running_loss = 0.0
                 torque_running_loss = 0.0
                 checkpoint = {'model': self.model.state_dict(),
                               'optimizer': self.optimizer.state_dict()}
                 torch.save(checkpoint, 'running_checkpoint.pth')
-            del positions, orientation_R, orientation_q, target_torque, target_force, energy_prediction, predicted_torque, predicted_force, _loss
 
         train_loss = train_loss / (i + 1)
 
-        return train_loss.item()
+        return train_loss
 
     def _validation(self, data_loader, print_output=False):
         self.model.eval()
         # with torch.no_grad():
         total_error = 0.
-        total_force_error = 0.
-        total_torque_error = 0.
-        for i, ((positions, orientation_q,orientation_R, neighbor_list), target_force, target_torque,
-                energy) in enumerate(
+        for i, (dr, force, energy) in enumerate(
             data_loader):
-            positions.requires_grad = True
-            orientation_R.requires_grad = True
-            positions = positions.to(self.device)
-            orientation_R = orientation_R.to(self.device)
-            
-            energy_prediction = self.model(positions, orientation_R, neighbor_list)
-            predicted_force = - torch.autograd.grad(energy_prediction.sum(),
-                                                    positions,
-                                                    create_graph=True)[0].to(
-                self.device)
-            torque_grad = - torch.autograd.grad(energy_prediction.sum(),
-                                                orientation_R,
-                                                create_graph=True)[0]
+            dr = dr.to(self.device)
+            dr.requires_grad = True
+            predicted_pair_force = self.model(dr)
 
-            predicted_torque = self._calculate_torque(torque_grad, orientation_R)
+            target_force = force.to(self.device)
 
-            target_force = target_force.to(self.device)
-            target_torque = target_torque.to(self.device)
-            force_error = self.criteria(predicted_force, target_force).item()
-            torque_error = self.criteria(predicted_torque,
-                                         target_torque).item()
-            total_error += (force_error + torque_error)
-            total_force_error += force_error
-            total_torque_error += torque_error
+            total_error += self.criteria(predicted_pair_force, target_force).item()
+
             if print_output and i % 100 == 0:
                 print('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$')
-                print("force prediction: ", predicted_force[5][:10])
+                print("force prediction: ", predicted_pair_force[5][:10])
                 print("force target: ", target_force[5][:10])
-                print("torque prediction: ", predicted_torque[5][:10])
-                print("torque target: ", target_torque[5][:10])
-                print('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$')
 
-        return total_error / (i + 1), total_force_error / (
-                i + 1), total_torque_error / (i + 1)
+        return total_error / (i + 1)
 
     def run(self):
         if self.overfit:
@@ -349,8 +264,9 @@ class MLTrainer:
             self._run_train_valid()
 
     def _run_overfit(self):
-        if self.log:
-            wandb.watch(models=self.model, criterion=self.force_loss, log="gradients",
+        if self.wandb_log:
+            wandb.watch(models=self.model, criterion=self.force_loss,
+                        log="gradients",
                         log_freq=200)
         print(
             '**************************Overfitting*******************************')
@@ -368,8 +284,8 @@ class MLTrainer:
 
                 # wandb.log({'train_loss': train_loss,
                 #            "learning rate": self.optimizer.param_groups[0]['lr']})
-        if self.log:
-            wandb.finish()
+
+        wandb.finish()
         checkpoint = {
             'epoch': epoch,
             'model': self.model.state_dict(),
@@ -378,8 +294,9 @@ class MLTrainer:
         torch.save(checkpoint, 'last_checkpoint.pth')
 
     def _run_train_valid(self):
-        if self.log:
-            wandb.watch(models=self.model, criterion=self.force_loss, log="gradients",
+        if self.wandb_log:
+            wandb.watch(models=self.model, criterion=self.force_loss,
+                        log="gradients",
                         log_freq=200)
         print(
             '**************************Training*******************************')
@@ -392,17 +309,15 @@ class MLTrainer:
             # if self.use_scheduler:
             #     self.scheduler.step(val_error)
             if epoch % 10 == 0:
-                val_error, val_force_error, val_torque_error = self._validation(
+                val_error = self._validation(
                     self.valid_dataloader, print_output=True)
                 if self.use_scheduler:
                     self.scheduler.step(val_error)
                 print('epoch {}/{}: \n\t train_loss: {}, \n\t val_error: {}'.
                       format(epoch + 1, self.epochs, train_loss, val_error))
-                if self.log:
+                if self.wandb_log:
                     wandb.log({'train_loss': train_loss,
                                'valid error': val_error,
-                               'valid force error': val_force_error,
-                               'valid torque error': val_torque_error,
                                "learning rate": self.optimizer.param_groups[0][
                                    'lr']})
 
@@ -423,7 +338,7 @@ class MLTrainer:
                         self.best_val_error, epoch))
                     print(
                         '#################################################################')
-                    if self.log:
+                    if self.wandb_log:
                         self.wandb_run.summary["best_epoch"] = epoch + 1
                         self.wandb_run.summary[
                             "best_val_error"] = self.best_val_error
@@ -431,12 +346,12 @@ class MLTrainer:
         # Testing
         print(
             '**************************Testing*******************************')
-        self.test_error, self.test_force_error, self.test_torque_error = self._validation(
+        self.test_error = self._validation(
             self.test_dataloader,
             print_output=True)
         print('Testing \n\t test error: {}'.
               format(self.test_error))
-        if self.log:
+        if self.wandb_log:
             self.wandb_run.summary['test error'] = self.test_error
             wandb.finish()
         checkpoint = {
