@@ -238,6 +238,8 @@ class MLTrainer:
             self.optimizer.zero_grad()
             positions.requires_grad = True
             orientation_R.requires_grad = True
+            positions = positions.to(self.device)
+            orientation_R = orientation_R.to(self.device)
 
             
             energy_prediction = self.model(positions, orientation_R, neighbor_list)
@@ -296,6 +298,8 @@ class MLTrainer:
             data_loader):
             positions.requires_grad = True
             orientation_R.requires_grad = True
+            positions = positions.to(self.device)
+            orientation_R = orientation_R.to(self.device)
             
             energy_prediction = self.model(positions, orientation_R, neighbor_list)
             predicted_force = - torch.autograd.grad(energy_prediction.sum(),
