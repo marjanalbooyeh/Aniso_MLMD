@@ -207,15 +207,10 @@ class IsoTrainer:
             dr.requires_grad = True
             dr = dr.to(self.device)
 
-            energy_prediction = self.model(dr)
-            predicted_force = - torch.autograd.grad(energy_prediction.sum(),
-                                                    dr,
-                                                    create_graph=True)[0].to(
-                self.device)
-
+            predicted_pair_force = self.model(dr)
             target_force = force.to(self.device)
 
-            force_loss = self.force_loss(predicted_force, target_force)
+            force_loss = self.force_loss(predicted_pair_force, target_force)
             train_loss += force_loss.item()
             running_loss += force_loss.item()
             force_loss.backward()
@@ -239,7 +234,7 @@ class IsoTrainer:
 
         train_loss = train_loss / (i + 1)
 
-        return train_loss.item()
+        return train_loss
 
     def _validation(self, data_loader, print_output=False):
         self.model.eval()
@@ -249,20 +244,15 @@ class IsoTrainer:
             data_loader):
             dr = dr.to(self.device)
             dr.requires_grad = True
-            energy_prediction = self.model(dr)
-            predicted_force = - torch.autograd.grad(energy_prediction.sum(),
-                                                    dr,
-                                                    create_graph=True)[0].to(
-                self.device)
-
+            predicted_pair_force = self.model(dr)
 
             target_force = force.to(self.device)
 
-            total_error += self.criteria(predicted_force, target_force).item()
+            total_error += self.criteria(predicted_pair_force, target_force).item()
 
             if print_output and i % 100 == 0:
                 print('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$')
-                print("force prediction: ", predicted_force[5][:10])
+                print("force prediction: ", predicted_pair_force[5][:10])
                 print("force target: ", target_force[5][:10])
 
         return total_error / (i + 1)

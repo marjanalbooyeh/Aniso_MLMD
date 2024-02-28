@@ -6,33 +6,30 @@ parameters["project"] = "pps-20-new"
 parameters["group"] = "rotation_matrix"
 parameters["notes"] = "Learning pps forces and torques"
 parameters["tags"] = "random sampling"
+parameters["wandb_log"] = False
 
 # dataset parameters
-parameters["data_path"] = "/home/marjan/Documents/code-base/ml_datasets/pps_20_new"
-parameters["batch_size"] = 2
+parameters["data_path"] = "/home/marjan/Documents/code-base/ml_datasets/isotropic_pair"
+parameters["batch_size"] = 32
 parameters["shrink"] = False
 parameters["overfit"] = False
 
 # model parameters
 # supported model types: "NN", "NNSkipShared", "NNGrow"
-parameters["in_dim"] = 80
-parameters["neighbor_hidden_dim"] = 64
-parameters["particle_hidden_dim"] = 64
+parameters["in_dim"] = 5
+parameters["hidden_dim"] = 64
 parameters["n_layer"] = 2
 parameters["act_fn"] = "Tanh"
 parameters["dropout"] = 0.3
 parameters["batch_norm"] = False
-parameters["neighbor_pool"] = "mean"
-parameters["particle_pool"] = "sum1"
-parameters["box_len"] = 16.17887
 
 
 # optimizer parameters
 parameters["optim"] = "Adam"
 parameters["lr"] = 0.001
 parameters["min_lr"] = 0.00001
-parameters["use_scheduler"] = False
-parameters["scheduler_type"] = "StepLR"
+parameters["use_scheduler"] = True
+parameters["scheduler_type"] = "ReduceLROnPlateau"
 parameters["decay"] = 0.001
 # supported loss types: "mse" (mean squared error), "mae" (means absolute error)
 parameters["loss_type"] = "mse"
@@ -41,7 +38,7 @@ parameters["prior_energy_sigma"] = 1
 parameters["prior_energy_n"] = 6
 
 # run parameters
-parameters["epochs"] = 50000
+parameters["epochs"] = 5000
 
 class Struct:
     def __init__(self, **entries):
@@ -51,7 +48,7 @@ config = Struct(**parameters)
 
 job_id = 0
 
-from aniso_MLMD.trainer import MLTrainer
-trainer_obj = MLTrainer(config, job_id)
+from iso_MLMD.trainer import IsoTrainer
+trainer_obj = IsoTrainer(config, job_id)
 trainer_obj.run()
 

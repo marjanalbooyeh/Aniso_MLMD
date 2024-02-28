@@ -47,7 +47,7 @@ class BasePairNN(nn.Module):
         inv_R = 1. / self.R
 
         # concatenate all features (B, N, N_neighbors, 80)
-        features = torch.cat((dr, R, inv_R), dim=-1)
+        features = torch.cat((dr, self.R, inv_R), dim=-1)
 
         return features.to(self.device)
 
@@ -66,16 +66,22 @@ class BasePairNN(nn.Module):
 
     def _calculate_prior_energy(self):
         U_0 = torch.pow(self.prior_energy_sigma / self.R, self.prior_energy_n)
-        return U_0.sum(dim=2).sum(dim=1)
+        return U_0
 
     def forward(self, dr):
         # pairwise distances dr (B, 3)
-        features = self._prep_features_rot_matrix(dr)
+        features = self._prep_features(dr)
         energy = self.energy_net(
             features)  # (B,1)
 
         if self.prior_energy:
             U_0 = self._calculate_prior_energy()
             energy = energy + U_0.to(self.device)
+        predicted_force = - torch.autograd.grad(energy.sum(),
+                                                dr,
+                                                create_graph=True)[0].to(
+            self.device)
+        predicted_pair_force = torch.stack((predicted_force, -predicted_force),
+                                           dim=1)
 
-        return energy
+        return predicted_pair_force
