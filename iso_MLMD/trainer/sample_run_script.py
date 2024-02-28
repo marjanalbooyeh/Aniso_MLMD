@@ -9,16 +9,17 @@ parameters["tags"] = "random sampling"
 parameters["wandb_log"] = False
 
 # dataset parameters
-parameters["data_path"] = "/home/marjan/Documents/code-base/ml_datasets/isotropic_pair"
+parameters["data_path"] = "/home/marjan/Documents/code-base/ml_datasets/iso_N_100"
 parameters["batch_size"] = 32
 parameters["shrink"] = False
 parameters["overfit"] = False
 
 # model parameters
-# supported model types: "NN", "NNSkipShared", "NNGrow"
+parameters["model_type"] = "neighbor"
 parameters["in_dim"] = 5
 parameters["hidden_dim"] = 64
 parameters["n_layer"] = 2
+parameters["box_len"] = 6
 parameters["act_fn"] = "Tanh"
 parameters["dropout"] = 0.3
 parameters["batch_norm"] = False

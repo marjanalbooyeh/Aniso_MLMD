@@ -20,14 +20,14 @@ def get_parameters():
     parameters = OrderedDict()
 
     # project parameters
-    parameters["project"] = ["iso-pair-Feb27"]
-    parameters["group"] = ["pair"]
+    parameters["project"] = ["iso-neighbor-Feb28"]
+    parameters["group"] = ["N100"]
     parameters["notes"] = ["Learning LJ pair forces and torques"]
     parameters["tags"] = ["random sampling"]
     parameters["wandb_log"] = [True]
 
     # dataset parameters
-    parameters["model_type"] = ["pair"]
+    parameters["model_type"] = ["neighbor"]
     parameters["data_path"] =[""]
     parameters["batch_size"] = [32]
     parameters["shrink"] = [False]
@@ -46,8 +46,8 @@ def get_parameters():
     parameters["optim"] = ["Adam"]
     parameters["lr"] = [0.001]
     parameters["min_lr"] = [0.00001]
-    parameters["use_scheduler"] = [False]
-    parameters["scheduler_type"] = ["StepLR"]
+    parameters["use_scheduler"] = [True]
+    parameters["scheduler_type"] = ["ReduceLROnPlateau"]
     parameters["decay"] = [0.001]
     # supported loss types: "mse" (mean squared error), "mae" (means absolute error)
     parameters["loss_type"] = ["mse"]
@@ -56,7 +56,7 @@ def get_parameters():
     parameters["prior_energy_n"] = [12]
 
     # run parameters
-    parameters["epochs"] = [1000]
+    parameters["epochs"] = [10000]
 
     return list(parameters.keys()), list(product(*parameters.values()))
 
@@ -65,7 +65,7 @@ custom_job_doc = {}  # add keys and values for each job document created
 
 
 def main(root=None):
-    project = signac.init_project("pair-iso", root=root)  # Set the signac project name
+    project = signac.init_project("neighbor-iso", root=root)  # Set the signac project name
     param_names, param_combinations = get_parameters()
     # Create jobs
     for params in param_combinations:

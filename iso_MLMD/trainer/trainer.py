@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import wandb
 
-from iso_MLMD.trainer import BasePairNN, load_datasets, load_overfit_data
+from iso_MLMD.trainer import IsoPairNN, IsoNeighborNN, load_datasets, load_overfit_data
 
 
 class IsoTrainer:
@@ -23,9 +23,11 @@ class IsoTrainer:
         self.overfit = config.overfit
 
         # model parameters
+        self.model_type = config.model_type
         self.in_dim = config.in_dim
         self.hidden_dim = config.hidden_dim
         self.n_layer = config.n_layer
+        self.box_len = config.box_len
         self.act_fn = config.act_fn
         self.dropout = config.dropout
         self.batch_norm = config.batch_norm
@@ -116,17 +118,31 @@ class IsoTrainer:
                                                              verbose=True)
 
     def _create_model(self):
-        model = BasePairNN(in_dim=self.in_dim,
-                           hidden_dim=self.hidden_dim,
-                           n_layers=self.n_layer,
-                           act_fn=self.act_fn,
-                           dropout=self.dropout,
-                           batch_norm=self.batch_norm,
-                           device=self.device,
-                           prior_energy=self.prior_energy,
-                           prior_energy_sigma=self.prior_energy_sigma,
-                           prior_energy_n=self.prior_energy_n
-                           )
+        if self.model_type == "pair":
+            model = IsoPairNN(in_dim=self.in_dim,
+                              hidden_dim=self.hidden_dim,
+                              n_layers=self.n_layer,
+                              act_fn=self.act_fn,
+                              dropout=self.dropout,
+                              batch_norm=self.batch_norm,
+                              device=self.device,
+                              prior_energy=self.prior_energy,
+                              prior_energy_sigma=self.prior_energy_sigma,
+                              prior_energy_n=self.prior_energy_n
+                              )
+        else:
+            model = IsoNeighborNN(in_dim=self.in_dim,
+                                  hidden_dim=self.hidden_dim,
+                                  n_layers=self.n_layer,
+                                  box_len=self.box_len,
+                                  act_fn=self.act_fn,
+                                  dropout=self.dropout,
+                                  batch_norm=self.batch_norm,
+                                  device=self.device,
+                                  prior_energy=self.prior_energy,
+                                  prior_energy_sigma=self.prior_energy_sigma,
+                                  prior_energy_n=self.prior_energy_n
+                                  )
         model.to(self.device)
         print(model)
         return model
@@ -146,9 +162,11 @@ class IsoTrainer:
             "batch_size": self.batch_size,
             "shrink": self.shrink,
             "lr": self.lr,
+            "model_type": self.model_type,
             "in_dim": self.in_dim,
             "hidden_dim": self.hidden_dim,
             "n_layer": self.n_layer,
+            "box_len": self.box_len,
             "optim": self.optim,
             "decay": self.decay,
             "act_fn": self.act_fn,
@@ -200,17 +218,20 @@ class IsoTrainer:
         self.model.train()
         train_loss = 0.
         running_loss = 0.
-        for i, (dr, force, energy) in enumerate(
+        for i, ((x, neighbor_list), force, energy) in enumerate(
             self.train_dataloader):
 
             self.optimizer.zero_grad()
-            dr.requires_grad = True
-            dr = dr.to(self.device)
-
-            predicted_pair_force = self.model(dr)
+            x.requires_grad = True
+            x = x.to(self.device)
+            if self.model_type == "pair":
+                predicted_force = self.model(x)
+            else:
+                neighbor_list = neighbor_list.to(self.device)
+                predicted_force = self.model(x, neighbor_list)
             target_force = force.to(self.device)
 
-            force_loss = self.force_loss(predicted_pair_force, target_force)
+            force_loss = self.force_loss(predicted_force, target_force)
             train_loss += force_loss.item()
             running_loss += force_loss.item()
             force_loss.backward()
@@ -226,8 +247,6 @@ class IsoTrainer:
                 print('running_loss: {}'.format(running_loss / 9.))
 
                 running_loss = 0.0
-                force_running_loss = 0.0
-                torque_running_loss = 0.0
                 checkpoint = {'model': self.model.state_dict(),
                               'optimizer': self.optimizer.state_dict()}
                 torch.save(checkpoint, 'running_checkpoint.pth')
@@ -240,19 +259,23 @@ class IsoTrainer:
         self.model.eval()
         # with torch.no_grad():
         total_error = 0.
-        for i, (dr, force, energy) in enumerate(
+        for i, ((x, neighbor_list), force, energy) in enumerate(
             data_loader):
-            dr = dr.to(self.device)
-            dr.requires_grad = True
-            predicted_pair_force = self.model(dr)
+            x.requires_grad = True
+            x = x.to(self.device)
+            if self.model_type == "pair":
+                predicted_force = self.model(x)
+            else:
+                neighbor_list = neighbor_list.to(self.device)
+                predicted_force = self.model(x, neighbor_list)
 
             target_force = force.to(self.device)
 
-            total_error += self.criteria(predicted_pair_force, target_force).item()
+            total_error += self.criteria(predicted_force, target_force).item()
 
             if print_output and i % 100 == 0:
                 print('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$')
-                print("force prediction: ", predicted_pair_force[5][:10])
+                print("force prediction: ", predicted_force[5][:10])
                 print("force target: ", target_force[5][:10])
 
         return total_error / (i + 1)

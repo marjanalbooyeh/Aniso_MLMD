@@ -8,9 +8,19 @@ from torch.utils.data import Dataset, DataLoader
 
 class CustomTrajDataset(Dataset):
     def __init__(self, traj_df):
-        self.dr = torch.from_numpy(
-            np.array(list(traj_df['dr']))).type(torch.FloatTensor)
+        if 'neighbor_list' in traj_df.columns:
+            self.x = torch.from_numpy(
+                np.array(list(traj_df['position']))).type(torch.FloatTensor)
+        else:
+            self.x = torch.from_numpy(
+                np.array(list(traj_df['dr']))).type(torch.FloatTensor)
 
+        if 'neighbor_list' in traj_df.columns:
+            self.neighbor_list = torch.from_numpy(
+            np.asarray(list(traj_df['neighbor_list'])).astype(np.int64))
+        else:
+            # create a fake neighbor list with the same shape as dr
+            self.neighbor_list = torch.zeros_like(self.x)
 
         self.force = torch.from_numpy(np.array(list(traj_df['force']))).type(
             torch.FloatTensor)
@@ -19,10 +29,10 @@ class CustomTrajDataset(Dataset):
             torch.FloatTensor)
 
     def __len__(self):
-        return len(self.dr)
+        return len(self.x)
 
     def __getitem__(self, i):
-        return self.dr[i], self.force[i], self.energy[
+        return (self.x[i], self.neighbor_list[i]), self.force[i], self.energy[
             i]
 
 def _get_data_loader(dataset, batch_size, shuffle=True):
