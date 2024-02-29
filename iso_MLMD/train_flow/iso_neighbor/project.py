@@ -124,8 +124,8 @@ def resume_job(job):
 
 
 def submit_project():
-    MyProject().run()
+    MyProject(environment=Fry).run()
 
 
 if __name__ == "__main__":
-    MyProject().main()
+    MyProject(environment=Fry).main()
