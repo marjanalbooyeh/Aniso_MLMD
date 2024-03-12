@@ -3,7 +3,7 @@ import torch.nn as nn
 import wandb
 
 from aniso_MLMD.trainer.data_loader import load_datasets, load_overfit_data
-from aniso_MLMD.model import BaseNeighborNN
+from aniso_MLMD.model import ForTorPredictorNN, EnergyPredictor
 
 
 class MLTrainer:
@@ -16,6 +16,7 @@ class MLTrainer:
         self.notes = config.notes
         self.tags = config.tags
         self.log = config.log
+        self.target = config.target
 
         # dataset parameters
         self.data_path = config.data_path
@@ -82,19 +83,26 @@ class MLTrainer:
 
         # create loss, optimizer and schedule
         if self.loss_type == "mae":
-            self.force_loss = nn.L1Loss().to(self.device)
-            self.torque_loss = nn.L1Loss().to(self.device)
+            if self.target == "energy":
+                self.force_loss = nn.L1Loss().to(self.device)
+                self.torque_loss = nn.L1Loss().to(self.device)
+            else:
+                self.target_loss = nn.L1Loss().to(self.device)
             self.criteria = nn.L1Loss().to(self.device)
         elif self.loss_type == "mse":
-            self.force_loss = nn.MSELoss().to(self.device)
-            self.torque_loss = nn.MSELoss().to(self.device)
+            if self.target == "energy":
+                self.force_loss = nn.MSELoss().to(self.device)
+                self.torque_loss = nn.MSELoss().to(self.device)
+            else:
+                self.target_loss = nn.MSELoss().to(self.device)
             self.criteria = nn.MSELoss().to(self.device)
         elif self.loss_type == "huber":
-            self.force_loss = nn.HuberLoss(delta=5).to(self.device)
-            self.torque_loss = nn.HuberLoss(delta=5).to(self.device)
+            if self.target == "energy":
+                self.force_loss = nn.HuberLoss(delta=5).to(self.device)
+                self.torque_loss = nn.HuberLoss(delta=5).to(self.device)
+            else:
+                self.target_loss = nn.HuberLoss(delta=5).to(self.device)
             self.criteria = nn.HuberLoss(delta=5).to(self.device)
-
-
 
         if self.optim == "Adam":
             self.optimizer = torch.optim.Adam(self.model.parameters(),
@@ -125,7 +133,9 @@ class MLTrainer:
                                                              verbose=True)
 
     def _create_model(self):
-        model = BaseNeighborNN(in_dim=self.in_dim,
+        if self.target == "energy":
+
+            model = EnergyPredictor(in_dim=self.in_dim,
                                neighbor_hidden_dim=self.neighbor_hidden_dim,
                                particle_hidden_dim=self.particle_hidden_dim,
                                box_len=self.box_len,
@@ -140,8 +150,18 @@ class MLTrainer:
                                prior_energy_sigma=self.prior_energy_sigma,
                                prior_energy_n=self.prior_energy_n
                                )
+        else:
+            model = ForTorPredictorNN(in_dim=self.in_dim,
+                               neighbor_hidden_dim=self.neighbor_hidden_dim,
+                               box_len=self.box_len,
+                               n_layers=self.n_layer,
+                               act_fn=self.act_fn,
+                               dropout=self.dropout,
+                               batch_norm=self.batch_norm,
+                               device=self.device,
+                               neighbor_pool=self.neighbor_pool)
+
         model.to(self.device)
-        print(model)
         return model
 
     def load_last_state(self):
@@ -149,12 +169,13 @@ class MLTrainer:
         last_checkpoint = torch.load('last_checkpoint.pth')
         self.model.load_state_dict(last_checkpoint['model'])
         self.optimizer.load_state_dict(last_checkpoint['optimizer'])
-        for param_group in self.optimizer.param_groups:
-            param_group['lr'] = 0.01
+        # for param_group in self.optimizer.param_groups:
+        #     param_group['lr'] = 0.01
         print('successfully loaded model and optimizer...')
 
     def _create_config(self):
         config = {
+            "target": self.target,
             "overfit": self.overfit,
             "batch_size": self.batch_size,
             "shrink": self.shrink,
@@ -200,12 +221,6 @@ class MLTrainer:
             self.wandb_run.summary["valid_size"] = self.valid_size
             self.wandb_run.summary["test_size"] = self.test_size
 
-    def _calculate_prior_energy(self, x1, x2):
-        dr = x1 - x2
-        r = torch.norm(dr, dim=1, keepdim=True)
-        U_0 = torch.pow(self.prior_energy_sigma / r, self.prior_energy_n).to(
-            self.device)
-        return U_0
 
     def _calculate_torque(self, torque_grad, R1):
 
@@ -244,28 +259,37 @@ class MLTrainer:
             orientation_R = orientation_R.to(self.device)
 
             
-            energy_prediction = self.model(positions, orientation_R, neighbor_list)
-            predicted_force = - torch.autograd.grad(energy_prediction.sum(),
-                                                    positions,
-                                                    create_graph=True)[0].to(
-                self.device)
-            torque_grad = - torch.autograd.grad(energy_prediction.sum(),
-                                                orientation_R,
-                                                create_graph=True)[0]
+            _prediction = self.model(positions, orientation_R, neighbor_list)
+            if self.target == "energy":
+                energy_prediction = _prediction
+                predicted_force = - torch.autograd.grad(energy_prediction.sum(),
+                                                        positions,
+                                                        create_graph=True)[0].to(
+                    self.device)
+                torque_grad = - torch.autograd.grad(energy_prediction.sum(),
+                                                    orientation_R,
+                                                    create_graph=True)[0]
 
-            predicted_torque = self._calculate_torque(torque_grad, orientation_R)
+                predicted_torque = self._calculate_torque(torque_grad, orientation_R)
 
-            target_force = target_force.to(self.device)
-            target_torque = target_torque.to(self.device)
+                target_force = target_force.to(self.device)
+                target_torque = target_torque.to(self.device)
 
-            force_loss = self.force_loss(predicted_force, target_force)
-            torque_loss = self.torque_loss(predicted_torque, target_torque)
-            _loss = force_loss + torque_loss
-            
+                force_loss = self.force_loss(predicted_force, target_force)
+                torque_loss = self.torque_loss(predicted_torque, target_torque)
+                _loss = force_loss + torque_loss
+                force_running_loss += force_loss.item()
+                torque_running_loss += torque_loss.item()
+
+            elif self.target == "force":
+                target_val = target_force.to(self.device)
+                _loss = self.target_loss(_prediction, target_val)
+            else:
+                target_val = target_torque.to(self.device)
+                _loss = self.target_loss(_prediction, target_val)
+
             train_loss += _loss
             running_loss += _loss.item()
-            force_running_loss += force_loss.item()
-            torque_running_loss += torque_loss.item()
             
             _loss.backward()
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), 5)
@@ -273,26 +297,21 @@ class MLTrainer:
 
             if i % 100 == 99:
                 if self.log:
-                    wandb.log({'running_loss': running_loss / 99.,
-                               'force_running_loss': force_running_loss / 99.,
-                               'torque_running_loss': torque_running_loss / 99.,
-                               "learning rate": self.optimizer.param_groups[0][
-                                   'lr']})
-                print('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$')
-                print('running_loss: ', running_loss / 99.)
-                print("force prediction: ", predicted_force[5][:10])
-                print("force target: ", target_force[5][:10])
-                print("torque prediction: ", predicted_torque[5][:10])
-                print("torque target: ", target_torque[5][:10])
+                    if self.target == "energy":
+                        wandb.log({'running_loss': running_loss / 99.,
+                                   'force_running_loss': force_running_loss / 99.,
+                                   'torque_running_loss': torque_running_loss / 99.,
+                                   })
+                    else:
+                        wandb.log({'running_loss': running_loss / 99.})
                
                     
                 running_loss = 0.0
+
                 force_running_loss = 0.0
                 torque_running_loss = 0.0
-                checkpoint = {'model': self.model.state_dict(),
-                              'optimizer': self.optimizer.state_dict()}
-                torch.save(checkpoint, 'running_checkpoint.pth')
-            del positions, orientation_R, orientation_q, target_torque, target_force, energy_prediction, predicted_torque, predicted_force, _loss
+            del positions, orientation_R, orientation_q,\
+                _prediction, _loss
 
         train_loss = train_loss / (i + 1)
 
@@ -311,32 +330,50 @@ class MLTrainer:
             orientation_R.requires_grad = True
             positions = positions.to(self.device)
             orientation_R = orientation_R.to(self.device)
-            
-            energy_prediction = self.model(positions, orientation_R, neighbor_list)
-            predicted_force = - torch.autograd.grad(energy_prediction.sum(),
-                                                    positions,
-                                                    create_graph=True)[0].to(
-                self.device)
-            torque_grad = - torch.autograd.grad(energy_prediction.sum(),
-                                                orientation_R,
-                                                create_graph=True)[0]
 
-            predicted_torque = self._calculate_torque(torque_grad, orientation_R)
+            _prediction = self.model(positions, orientation_R, neighbor_list)
+            if self.target == "energy":
+                energy_prediction = _prediction
+                predicted_force = - torch.autograd.grad(energy_prediction.sum(),
+                                                        positions,
+                                                        create_graph=True)[
+                    0].to(
+                    self.device)
+                torque_grad = - torch.autograd.grad(energy_prediction.sum(),
+                                                    orientation_R,
+                                                    create_graph=True)[0]
 
-            target_force = target_force.to(self.device)
-            target_torque = target_torque.to(self.device)
-            force_error = self.criteria(predicted_force, target_force).item()
-            torque_error = self.criteria(predicted_torque,
-                                         target_torque).item()
-            total_error += (force_error + torque_error)
-            total_force_error += force_error
-            total_torque_error += torque_error
+                predicted_torque = self._calculate_torque(torque_grad,
+                                                          orientation_R)
+
+                target_force = target_force.to(self.device)
+                target_torque = target_torque.to(self.device)
+                force_error = self.criteria(predicted_force,
+                                            target_force).item()
+                torque_error = self.criteria(predicted_torque,
+                                             target_torque).item()
+
+                total_error += (force_error + torque_error)
+            elif self.target == "force":
+                target_val = target_force.to(self.device)
+                _error = self.criteria(_prediction, target_val).item()
+                total_error += _error
+            else:
+                target_val = target_torque.to(self.device)
+                _error = self.criteria(_prediction, target_val).item()
+                total_error += _error
+
             if print_output and i % 100 == 0:
                 print('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$')
-                print("force prediction: ", predicted_force[5][:10])
-                print("force target: ", target_force[5][:10])
-                print("torque prediction: ", predicted_torque[5][:10])
-                print("torque target: ", target_torque[5][:10])
+                if self.target == "energy":
+                    print("force prediction: ", predicted_force[5][:10])
+                    print("force target: ", target_force[5][:10])
+                    print("torque prediction: ", predicted_torque[5][:10])
+                    print("torque target: ", target_torque[5][:10])
+                else:
+                    print("prediction: ", _prediction[5][:10])
+                    print("target: ", target_val[5][:10])
+
                 print('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$')
 
         return total_error / (i + 1), total_force_error / (
@@ -399,12 +436,18 @@ class MLTrainer:
                 print('epoch {}/{}: \n\t train_loss: {}, \n\t val_error: {}'.
                       format(epoch + 1, self.epochs, train_loss, val_error))
                 if self.log:
-                    wandb.log({'train_loss': train_loss,
-                               'valid error': val_error,
-                               'valid force error': val_force_error,
-                               'valid torque error': val_torque_error,
-                               "learning rate": self.optimizer.param_groups[0][
-                                   'lr']})
+                    if self.target == "energy":
+                        wandb.log({'train_loss': train_loss,
+                                   'valid error': val_error,
+                                   'valid force error': val_force_error,
+                                   'valid torque error': val_torque_error,
+                                   "learning rate": self.optimizer.param_groups[0][
+                                       'lr']})
+                    else:
+                        wandb.log({'train_loss': train_loss,
+                                   'valid error': val_error,
+                                   "learning rate": self.optimizer.param_groups[0][
+                                       'lr']})
 
                 if self.best_val_error is None:
                     self.best_val_error = val_error
