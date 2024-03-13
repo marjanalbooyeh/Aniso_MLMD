@@ -2,8 +2,9 @@ import hoomd
 import torch
 import numpy as np
 import freud
-
+import cupy
 from iso_MLMD.trainer import IsoNeighborNN
+import time
 
 
 class IsoNeighborCustomForce(hoomd.md.force.Custom):
@@ -11,7 +12,7 @@ class IsoNeighborCustomForce(hoomd.md.force.Custom):
                  n_layers, box_len, act_fn, dropout, prior_energy,
                  prior_energy_sigma,
                  prior_energy_n, NN=40):
-        super().__init__(aniso=True)
+        super().__init__(aniso=False)
         # load ML model
         self.device = torch.device(
             "cuda:0" if torch.cuda.is_available() else "cpu")
@@ -46,20 +47,24 @@ class IsoNeighborCustomForce(hoomd.md.force.Custom):
 
     def set_forces(self, timestep):
         # get positions and orientations
-        with self._state.cpu_local_snapshot as snap:
-            rtags = snap.particles.rtag
-            positions = np.array(snap.particles.position[rtags],
-                                 copy=True)
+        with self._state.gpu_local_snapshot as snap:
+            rtags = cupy.array(snap.particles.rtag, copy=False)
+            positions = cupy.array(snap.particles.position[rtags],
+                                   copy=True)
 
         # get neighbor list
-        neighbor_list = self.find_neighbors(positions)
-        positions_tensor = torch.from_numpy(positions).type(
-            torch.FloatTensor).to(self.device)
-        neighbor_list_tensor = torch.from_numpy(neighbor_list).type(
-            torch.LongTensor).to(self.device)
+        neighbor_list = self.find_neighbors(positions.get())
+        positions_tensor = torch.as_tensor(positions).type(
+            torch.FloatTensor).to(self.device).unsqueeze(0)
+        neighbor_list_tensor = torch.from_numpy(neighbor_list.astype(np.int64)).to(self.device).unsqueeze(0)
         positions_tensor.requires_grad = True
-        predicted_force = self.model(positions_tensor, neighbor_list_tensor)
-        predicted_force = predicted_force.detach().cpu().numpy()
+        predicted_force = self.model(positions_tensor, neighbor_list_tensor).detach()
 
-        with self.cpu_local_force_arrays as arrays:
-            arrays.force[rtags] = predicted_force
+        predicted_force_cupy = cupy.asarray(predicted_force)
+
+        with self.gpu_local_force_arrays as arrays:
+            with self._state.gpu_local_snapshot as snap:
+                rtags = cupy.array(snap.particles.rtag, copy=False)
+                arrays.force[rtags] = predicted_force_cupy
+        del predicted_force, predicted_force_cupy, neighbor_list_tensor, positions_tensor, rtags, positions
+
