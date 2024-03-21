@@ -416,8 +416,12 @@ class MLTrainer:
 
     def _run_train_valid(self):
         if self.log:
-            wandb.watch(models=self.model, criterion=self.force_loss, log="gradients",
-                        log_freq=200)
+            if self.target == "energy":
+                wandb.watch(models=self.model, criterion=self.force_loss, log="gradients",
+                            log_freq=200)
+            else:
+                wandb.watch(models=self.model, criterion=self.target_loss, log="gradients",
+                            log_freq=200)
         print(
             '**************************Training*******************************')
         self.best_val_error = None

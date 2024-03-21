@@ -111,7 +111,7 @@ def _prep_features_rot_matrix(position,
                           rel_orient.flatten(start_dim=-2),
                           rbf_particle,
                           rbf_neighbors,
-                          angle
+                          # angle
                           ),
                          dim=-1)
 
@@ -186,8 +186,8 @@ class ForTorPredictorNN(nn.Module):
         features, R = _prep_features_rot_matrix(position, orientation_R,
                                              neighbor_list, self.box_len,
                                              self.device)
-        neighbor_features = self.neighbors_net(
-            features)  # (B, N, N_neighbors, neighbor_hidden_dim)
+
+        neighbor_features = self.neighbors_net(features)  # (B, N, N_neighbors, neighbor_hidden_dim)
         # pool over the neighbors dimension
         prediction = _pool_neighbors(
             neighbor_features,

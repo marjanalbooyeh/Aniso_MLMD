@@ -18,7 +18,7 @@ class AnisoNeighborCustomForce(hoomd.md.force.Custom):
         # load force model
         self.force_model = ForTorPredictorNN(in_dim=best_force_job.sp.in_dim,
                                    neighbor_hidden_dim=best_force_job.sp.neighbor_hidden_dim,
-                                   n_layers=best_force_job.sp.n_layers,
+                                   n_layers=best_force_job.sp.n_layer,
                                    box_len=best_force_job.sp.box_len,
                                    act_fn=best_force_job.sp.act_fn,
                                    dropout=best_force_job.sp.dropout,
@@ -34,7 +34,7 @@ class AnisoNeighborCustomForce(hoomd.md.force.Custom):
         # load torque model
         self.torque_model = ForTorPredictorNN(in_dim=best_torque_job.sp.in_dim,
                                       neighbor_hidden_dim=best_torque_job.sp.neighbor_hidden_dim,
-                                      n_layers=best_torque_job.sp.n_layers,
+                                      n_layers=best_torque_job.sp.n_layer,
                                       box_len=best_torque_job.sp.box_len,
                                       act_fn=best_torque_job.sp.act_fn,
                                       dropout=best_torque_job.sp.dropout,
@@ -75,23 +75,24 @@ class AnisoNeighborCustomForce(hoomd.md.force.Custom):
         positions_tensor = torch.as_tensor(positions).type(
             torch.FloatTensor).to(self.device).unsqueeze(0)
         neighbor_list_tensor = torch.from_numpy(neighbor_list.astype(np.int64)).to(self.device).unsqueeze(0)
-        orientation_R_tensor = torch.from_numpy(orientation_R).type(torch.FloatTensor)
-
-
-        predicted_force = self.force_model(positions_tensor, orientation_R_tensor,
-                                           neighbor_list_tensor).detach()
-        predicted_toque = self.torque_model(positions_tensor, orientation_R_tensor,
-                                           neighbor_list_tensor).detach()
+        orientation_R_tensor = torch.from_numpy(orientation_R).type(torch.FloatTensor).to(self.device).unsqueeze(0)
+        with torch.no_grad():
+        
+            predicted_force = self.force_model(positions_tensor, orientation_R_tensor,
+                                               neighbor_list_tensor).detach()
+            predicted_torque = self.torque_model(positions_tensor, orientation_R_tensor,
+                                               neighbor_list_tensor).detach()
 
         predicted_force_cupy = cupy.asarray(predicted_force)
-        predicted_toque_cupy = cupy.asarray(predicted_toque)
+        predicted_torque_cupy = cupy.asarray(predicted_torque)
+        
 
         with self.gpu_local_force_arrays as arrays:
             with self._state.gpu_local_snapshot as snap:
                 rtags = cupy.array(snap.particles.rtag, copy=False)
                 arrays.force[rtags] = predicted_force_cupy
-                arrays.torque[rtags] = predicted_toque_cupy
+                arrays.torque[rtags] = predicted_torque_cupy
         del predicted_force, predicted_force_cupy,\
-            predicted_toque, predicted_toque_cupy,\
+            predicted_torque, predicted_torque_cupy,\
             neighbor_list_tensor, positions_tensor, rtags, positions
 
