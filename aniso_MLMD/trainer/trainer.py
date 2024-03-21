@@ -43,6 +43,8 @@ class MLTrainer:
         self.decay = config.decay
         self.use_scheduler = config.use_scheduler
         self.scheduler_type = config.scheduler_type
+        self.scheduler_patience = config.scheduler_patience
+        self.scheduler_threshold = config.scheduler_threshold
         self.loss_type = config.loss_type
 
         # prior energy parameters
@@ -124,8 +126,9 @@ class MLTrainer:
     def set_scheduler(self):
         if self.scheduler_type == "ReduceLROnPlateau":
             self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-                self.optimizer, factor=0.98, patience=200, min_lr=self.min_lr,
-                verbose=True)
+                self.optimizer, factor=0.98, patience=self.scheduler_patience,
+                min_lr=self.min_lr, threshold=self.scheduler_threshold,
+                verbose=True, cooldown=30)
         elif self.scheduler_type == "StepLR":
             self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer,
                                                              step_size=5000,
@@ -192,6 +195,8 @@ class MLTrainer:
             "dropout": self.dropout,
             "use_scheduler": self.use_scheduler,
             "scheduler_type": self.scheduler_type,
+            "scheduler_patience": self.scheduler_patience,
+            "scheduler_threshold": self.scheduler_threshold,
             "loss_type": self.loss_type,
             "batch_norm": self.batch_norm,
             "resume": self.resume,
