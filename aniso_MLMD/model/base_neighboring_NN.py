@@ -147,8 +147,8 @@ class ForTorPredictorNN(nn.Module):
                  n_layers, box_len,
                  act_fn="ReLU",
                  dropout=0.3, batch_norm=True, device=None,
-                 neighbor_pool="mean",
-                 ):
+                 neighbor_pool="mean", prior_force=False, prior_force_sigma=1.0,
+                 prior_force_n=12):
         super(ForTorPredictorNN, self).__init__()
         self.neighbor_hidden_dim = neighbor_hidden_dim
         self.energy_out_dim = 1
@@ -160,6 +160,9 @@ class ForTorPredictorNN(nn.Module):
         self.in_dim = in_dim
         self.batch_norm = batch_norm
         self.neighbor_pool = neighbor_pool
+        self.prior_force = prior_force
+        self.prior_force_sigma = prior_force_sigma
+        self.prior_force_n = prior_force_n
 
         self.neighbors_net = self._neighbors_net().to(self.device)
 
@@ -176,6 +179,11 @@ class ForTorPredictorNN(nn.Module):
         layers.append(nn.Linear(self.neighbor_hidden_dim, 3))
         return nn.Sequential(*layers)
 
+    def _calculate_prior_force(self, R):
+        F_0 = (-1) * (self.prior_force_n / R) * torch.pow(
+            self.prior_force_sigma/R, self.prior_force_n)
+        return F_0
+
     def forward(self, position, orientation_R, neighbor_list):
         # position: particle positions (B, N, 3)
         # orientation_R: particle orientation rotation matrix (B, N, 3, 3)
@@ -184,14 +192,18 @@ class ForTorPredictorNN(nn.Module):
 
         # features: (B, N, N_neighbors, 80)
         features, R = _prep_features_rot_matrix(position, orientation_R,
-                                             neighbor_list, self.box_len,
-                                             self.device)
+                                                neighbor_list, self.box_len,
+                                                self.device)
 
-        neighbor_features = self.neighbors_net(features)  # (B, N, N_neighbors, neighbor_hidden_dim)
+        neighbor_features = self.neighbors_net(
+            features)  # (B, N, N_neighbors, neighbor_hidden_dim)
         # pool over the neighbors dimension
         prediction = _pool_neighbors(
             neighbor_features,
             self.neighbor_pool)  # (B, N, neighbor_hidden_dim)
+        if self.prior_force:
+            F_0 = torch.pow(self.prior_force_sigma / R, self.prior_force_n)
+            prediction = prediction + F_0.to(self.device)
 
         return prediction
 
@@ -261,8 +273,8 @@ class EnergyPredictor(nn.Module):
 
         # features: (B, N, N_neighbors, 80)
         features, R = _prep_features_rot_matrix(position, orientation_R,
-                                             neighbor_list, self.box_len,
-                                             self.device)
+                                                neighbor_list, self.box_len,
+                                                self.device)
         neighbor_features = self.neighbors_net(
             features)  # (B, N, N_neighbors, neighbor_hidden_dim)
         # pool over the neighbors dimension

@@ -55,6 +55,13 @@ class MLTrainer:
             self.prior_energy_sigma = config.prior_energy_sigma
             self.prior_energy_n = config.prior_energy_n
 
+        self.prior_force = config.prior_force
+        self.prior_force_sigma = None
+        self.prior_force_n = None
+        if config.prior_force:
+            self.prior_force_sigma = config.prior_force_sigma
+            self.prior_force_n = config.prior_force_n
+
         # run parameters
         self.epochs = config.epochs
 
@@ -139,30 +146,34 @@ class MLTrainer:
         if self.target == "energy":
 
             model = EnergyPredictor(in_dim=self.in_dim,
-                               neighbor_hidden_dim=self.neighbor_hidden_dim,
-                               particle_hidden_dim=self.particle_hidden_dim,
-                               box_len=self.box_len,
-                               n_layers=self.n_layer,
-                               act_fn=self.act_fn,
-                               dropout=self.dropout,
-                               batch_norm=self.batch_norm,
-                               device=self.device,
-                               neighbor_pool=self.neighbor_pool,
-                               particle_pool=self.particle_pool,
-                               prior_energy=self.prior_energy,
-                               prior_energy_sigma=self.prior_energy_sigma,
-                               prior_energy_n=self.prior_energy_n
-                               )
+                                    neighbor_hidden_dim=self.neighbor_hidden_dim,
+                                    particle_hidden_dim=self.particle_hidden_dim,
+                                    box_len=self.box_len,
+                                    n_layers=self.n_layer,
+                                    act_fn=self.act_fn,
+                                    dropout=self.dropout,
+                                    batch_norm=self.batch_norm,
+                                    device=self.device,
+                                    neighbor_pool=self.neighbor_pool,
+                                    particle_pool=self.particle_pool,
+                                    prior_energy=self.prior_energy,
+                                    prior_energy_sigma=self.prior_energy_sigma,
+                                    prior_energy_n=self.prior_energy_n
+                                    )
         else:
             model = ForTorPredictorNN(in_dim=self.in_dim,
-                               neighbor_hidden_dim=self.neighbor_hidden_dim,
-                               box_len=self.box_len,
-                               n_layers=self.n_layer,
-                               act_fn=self.act_fn,
-                               dropout=self.dropout,
-                               batch_norm=self.batch_norm,
-                               device=self.device,
-                               neighbor_pool=self.neighbor_pool)
+                                      neighbor_hidden_dim=self.neighbor_hidden_dim,
+                                      box_len=self.box_len,
+                                      n_layers=self.n_layer,
+                                      act_fn=self.act_fn,
+                                      dropout=self.dropout,
+                                      batch_norm=self.batch_norm,
+                                      device=self.device,
+                                      neighbor_pool=self.neighbor_pool,
+                                      prior_force=self.prior_force,
+                                      prior_force_sigma=self.prior_force_sigma,
+                                      prior_force_n=self.prior_force_n
+                                      )
 
         model.to(self.device)
         return model
@@ -202,7 +213,10 @@ class MLTrainer:
             "resume": self.resume,
             "prior_energy": self.prior_energy,
             "prior_energy_sigma": self.prior_energy_sigma,
-            "prior_energy_n": self.prior_energy_n
+            "prior_energy_n": self.prior_energy_n,
+            "prior_force": self.prior_force,
+            "prior_force_sigma": self.prior_force_sigma,
+            "prior_force_n": self.prior_force_n,
 
         }
         print("***************** Config *******************")
@@ -213,10 +227,11 @@ class MLTrainer:
     def _initiate_wandb_run(self):
         if self.log:
             self.wandb_config = self._create_config()
-    
+
             self.wandb_run = wandb.init(project=self.project, notes=self.notes,
                                         group=self.group,
-                                        tags=self.tags, config=self.wandb_config)
+                                        tags=self.tags,
+                                        config=self.wandb_config)
             self.wandb_run_name = self.wandb_run.name
             self.wandb_run_path = self.wandb_run.path
             self.wandb_run.summary["job_id"] = self.job_id
@@ -225,7 +240,6 @@ class MLTrainer:
             self.wandb_run.summary["train_size"] = self.train_size
             self.wandb_run.summary["valid_size"] = self.valid_size
             self.wandb_run.summary["test_size"] = self.test_size
-
 
     def _calculate_torque(self, torque_grad, R1):
 
@@ -253,8 +267,10 @@ class MLTrainer:
         running_loss = 0.
         force_running_loss = 0.
         torque_running_loss = 0.
-        for i, ((positions, orientation_q, orientation_R, neighbor_list), target_force, target_torque,
-                energy) in enumerate(
+        for i, (
+        (positions, orientation_q, orientation_R, neighbor_list), target_force,
+        target_torque,
+        energy) in enumerate(
             self.train_dataloader):
 
             self.optimizer.zero_grad()
@@ -263,19 +279,20 @@ class MLTrainer:
             positions = positions.to(self.device)
             orientation_R = orientation_R.to(self.device)
 
-            
             _prediction = self.model(positions, orientation_R, neighbor_list)
             if self.target == "energy":
                 energy_prediction = _prediction
                 predicted_force = - torch.autograd.grad(energy_prediction.sum(),
                                                         positions,
-                                                        create_graph=True)[0].to(
+                                                        create_graph=True)[
+                    0].to(
                     self.device)
                 torque_grad = - torch.autograd.grad(energy_prediction.sum(),
                                                     orientation_R,
                                                     create_graph=True)[0]
 
-                predicted_torque = self._calculate_torque(torque_grad, orientation_R)
+                predicted_torque = self._calculate_torque(torque_grad,
+                                                          orientation_R)
 
                 target_force = target_force.to(self.device)
                 target_torque = target_torque.to(self.device)
@@ -295,7 +312,7 @@ class MLTrainer:
 
             train_loss += _loss
             running_loss += _loss.item()
-            
+
             _loss.backward()
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), 5)
             self.optimizer.step()
@@ -309,13 +326,12 @@ class MLTrainer:
                                    })
                     else:
                         wandb.log({'running_loss': running_loss / 99.})
-               
-                    
+
                 running_loss = 0.0
 
                 force_running_loss = 0.0
                 torque_running_loss = 0.0
-            del positions, orientation_R, orientation_q,\
+            del positions, orientation_R, orientation_q, \
                 _prediction, _loss
 
         train_loss = train_loss / (i + 1)
@@ -328,8 +344,10 @@ class MLTrainer:
         total_error = 0.
         total_force_error = 0.
         total_torque_error = 0.
-        for i, ((positions, orientation_q,orientation_R, neighbor_list), target_force, target_torque,
-                energy) in enumerate(
+        for i, (
+        (positions, orientation_q, orientation_R, neighbor_list), target_force,
+        target_torque,
+        energy) in enumerate(
             data_loader):
             positions.requires_grad = True
             orientation_R.requires_grad = True
@@ -392,7 +410,8 @@ class MLTrainer:
 
     def _run_overfit(self):
         if self.log:
-            wandb.watch(models=self.model, criterion=self.force_loss, log="gradients",
+            wandb.watch(models=self.model, criterion=self.force_loss,
+                        log="gradients",
                         log_freq=200)
         print(
             '**************************Overfitting*******************************')
@@ -422,10 +441,12 @@ class MLTrainer:
     def _run_train_valid(self):
         if self.log:
             if self.target == "energy":
-                wandb.watch(models=self.model, criterion=self.force_loss, log="gradients",
+                wandb.watch(models=self.model, criterion=self.force_loss,
+                            log="gradients",
                             log_freq=200)
             else:
-                wandb.watch(models=self.model, criterion=self.target_loss, log="gradients",
+                wandb.watch(models=self.model, criterion=self.target_loss,
+                            log="gradients",
                             log_freq=200)
         print(
             '**************************Training*******************************')
@@ -450,13 +471,15 @@ class MLTrainer:
                                    'valid error': val_error,
                                    'valid force error': val_force_error,
                                    'valid torque error': val_torque_error,
-                                   "learning rate": self.optimizer.param_groups[0][
-                                       'lr']})
+                                   "learning rate":
+                                       self.optimizer.param_groups[0][
+                                           'lr']})
                     else:
                         wandb.log({'train_loss': train_loss,
                                    'valid error': val_error,
-                                   "learning rate": self.optimizer.param_groups[0][
-                                       'lr']})
+                                   "learning rate":
+                                       self.optimizer.param_groups[0][
+                                           'lr']})
 
                 if self.best_val_error is None:
                     self.best_val_error = val_error
