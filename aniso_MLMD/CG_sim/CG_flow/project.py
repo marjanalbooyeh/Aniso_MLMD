@@ -53,24 +53,93 @@ def resumed(job):
     return job.doc.get("resumed")
 
 
-def pair_force(sigma=1, epsilon=1):
+def create_rigid_simulation(kT, initial_rigid_snap, const_particle_types,rel_const_pos, pps_ff, dt, log_freq):
     import hoomd
-    """
-    Creates non-bonded forces between A particles.
-    """
-    cell = hoomd.md.nlist.Cell(buffer=0.4)
+    rigid_simulation = hoomd.Simulation(device=hoomd.device.auto_select(), seed=1)
+    rigid_simulation.create_state_from_snapshot(initial_rigid_snap)
+
+    rigid = hoomd.md.constrain.Rigid()
+    rigid.body['rigid'] = {
+        "constituent_types":const_particle_types,
+        "positions": rel_const_pos,
+        "orientations": [(1.0, 0.0, 0.0, 0.0)]* len(rel_const_pos),
+        }
+    integrator = hoomd.md.Integrator(dt=dt, integrate_rotational_dof=True)
+    rigid_simulation.operations.integrator = integrator
+    integrator.rigid = rigid
+    rigid_centers_and_free = hoomd.filter.Rigid(("center", "free"))
+    nvt = hoomd.md.methods.ConstantVolume(
+        filter=rigid_centers_and_free,
+        thermostat=hoomd.md.methods.thermostats.MTTK(kT=kT, tau=0.1))
+    integrator.methods.append(nvt)
+    
+    cell = hoomd.md.nlist.Cell(buffer=0, exclusions=['body'])
+    
     lj = hoomd.md.pair.LJ(nlist=cell)
-    lj.params[('A', 'A')] = dict(epsilon=epsilon, sigma=sigma)
-    lj.r_cut[('A', 'A')] = 2.5 * sigma
-    return lj
+    
+    # use aa pps simulation to define lj and special lj forces between constituent particles
+    for k, v in dict(pps_ff[0].params).items():
+        lj.params[k] = v
+        lj.r_cut[k] = 2.5
+    
+    lj.params[('rigid', ['rigid', 'ca', 'sh'])]= dict(epsilon=0, sigma=0)
+    lj.r_cut[('rigid', ['rigid', 'ca', 'sh'])] = 0
 
+    integrator.forces.append(lj)
+    rigid_simulation.state.thermalize_particle_momenta(filter=rigid_centers_and_free,
+                                             kT=kT)
+    
+    rigid_simulation.run(0)
 
+    
+    log_quantities = [
+                        "kinetic_temperature",
+                        "potential_energy",
+                        "kinetic_energy",
+                        "volume",
+                        "pressure",
+                        "pressure_tensor",
+                    ]
+    logger = hoomd.logging.Logger(categories=["scalar", "string", "particle"])
+    logger.add(rigid_simulation, quantities=["timestep", "tps"])
+    thermo_props = hoomd.md.compute.ThermodynamicQuantities(filter=hoomd.filter.All())
+    rigid_simulation.operations.computes.append(thermo_props)
+    logger.add(thermo_props, quantities=log_quantities)
+    
+    # for f in integrator.forces:
+    #     logger.add(f, quantities=["energy", "forces", "energies"])
+
+    logger.add(rigid_simulation.operations.integrator.rigid, quantities=["torques", "forces", "energies"])
+    
+    gsd_writer = hoomd.write.GSD(
+        filename="rigid_trajectory.gsd",
+        trigger=hoomd.trigger.Periodic(int(log_freq)),
+        mode="wb",
+        logger=logger,
+        filter=hoomd.filter.All(),
+        dynamic=["momentum", "property"]
+        )
+    
+    rigid_simulation.operations.writers.append(gsd_writer)
+
+    table_logger = hoomd.logging.Logger(categories=["scalar", "string"])
+    table_logger.add(rigid_simulation, quantities=["timestep", "tps"])
+    table_logger.add(thermo_props, quantities=log_quantities)
+    table_file = hoomd.write.Table(
+            output=open("rigid_log.txt", mode="w", newline="\n"),
+            trigger=hoomd.trigger.Periodic(int(log_freq)),
+            logger=table_logger,
+            max_header_len=None,
+        )
+    rigid_simulation.operations.writers.append(table_file)
+    return rigid_simulation
+    
 @directives(executable="python -u")
 @directives(ngpu=1)
 @MyProject.operation
 @MyProject.post(sampled)
 def run(job):
-    from iso_MLMD.CG_sim import IsoNeighborCustomForce
+    from aniso_MLMD.CG_sim import AnisoNeighborCustomForce
     from flowermd.base import Simulation
     import gsd.hoomd
     import signac
@@ -86,53 +155,59 @@ def run(job):
         print("----------------------")
 
         # load model from best job
-        project = signac.get_project(
-            "/home/marjanalbooyeh/Aniso_ML_MD_project/Aniso_MLMD/iso_MLMD/train_flow/iso_neighbor_Feb28/")
-        best_job_id = "0245343d690808044617b9b0a4c30c83"
-        best_job = project.open_job(id=best_job_id)
-        init_snap = \
-            gsd.hoomd.open(
-                '/home/marjanalbooyeh/Aniso_ML_MD_project/Aniso_MLMD/iso_MLMD/sampling/logs/N_200/restart.gsd')[
-                0]
+        # force project
+        force_project = signac.get_project(job.sp.force_project_path)
+        best_force_job_id = job.sp.force_job_id
+        best_force_job = force_project.open_job(id=best_force_job_id)
+        
+        # torque project
+        torque_project = signac.get_project(job.sp.torque_project_path)
+        best_torque_job_id = job.sp.torque_job_id
+        best_torque_job = torque_project.open_job(id=best_torque_job_id)
 
-        custom_force = IsoNeighborCustomForce(model_path=best_job.fn("best_model_checkpoint.pth"),
-                                              in_dim=best_job.sp.in_dim,
-                                              hidden_dim=best_job.sp.hidden_dim,
-                                              n_layers=best_job.sp.n_layer,
-                                              box_len=init_snap.configuration.box[0],
-                                              act_fn=best_job.sp.act_fn,
-                                              dropout=best_job.sp.dropout,
-                                              prior_energy=best_job.sp.prior_energy,
-                                              prior_energy_sigma=best_job.sp.prior_energy_sigma,
-                                              prior_energy_n=best_job.sp.prior_energy_n,
-                                              )
-
-        sim = Simulation(init_snap, [custom_force], dt=0.0001,
-                         gsd_write_freq=1000,
+        custom_force = AnisoNeighborCustomForce(best_force_job=best_force_job, best_torque_job=best_torque_job)
+        initial_cg_snapshot = gsd.hoomd.open(job.sp.cg_snapshot)[0]
+        sim = Simulation(initial_cg_snapshot, [custom_force], 
+                         dt=job.sp.cg_dt,
+                         gsd_write_freq=job.sp.cg_log_freq,
                          gsd_file_name='ML_trajectory.gsd',
-                         log_write_freq=1000,
-                         log_file_name='ML_log.txt')
+                         log_write_freq=job.sp.cg_log_freq,
+                         log_file_name='ML_log.txt',
+                        integrate_rotational_dof=True)
         print("ML Simulation...")
         print("----------------------")
-        sim.run_NVT(n_steps=job.sp.n_steps, kT=job.sp.kT, tau_kt=0.1, write_at_start=True)
+        sim.run_NVT(n_steps=job.sp.cg_n_steps, kT=job.sp.kT, tau_kt=0.1, write_at_start=True)
         sim.flush_writers()
 
-        energy_log = np.array(custom_force.model.energy_log)
-        np.save('energy_log.npy', energy_log)
 
-        forces = [pair_force(sigma=1, epsilon=1)]
-        lj_sim = Simulation(initial_state=init_snap,
-                            forcefield=forces,
-                            dt=0.0001,
-                            gsd_write_freq=1000,
-                            gsd_file_name='LJ_trajectory.gsd',
-                            log_write_freq=1000,
-                            log_file_name='LJ_log.txt')
-        print("LJ Simulation...")
+        # Rigid Body Simulation
+        import pickle
+        with open(job.sp.pps_ff_path, "rb") as f:
+            pps_ff = pickle.load(f)
+        const_particle_types = ['ca', 'ca', 'ca', 'ca', 'sh', 'ca', 'ca']
+        rel_const_pos = np.load(job.sp.rel_const_pos_path)
+        initial_rigid_snap = gsd.hoomd.open(job.sp.rigid_snapshot)[0]
+        rigid_simulation = create_rigid_simulation(job.sp.kT, initial_rigid_snap, const_particle_types,rel_const_pos, pps_ff, job.sp.dt, job.sp.log_freq)
+        print("Rigid Simulation...")
         print("----------------------")
-        lj_sim.run_NVT(n_steps=job.sp.n_steps, kT=job.sp.kT, tau_kt=0.1, write_at_start=True)
-        lj_sim.flush_writers()
+        rigid_simulation.run(job.sp.n_steps, write_at_start=True)
+        rigid_simulation.operations.writers[0].flush()
+        
 
+
+        ## UA simulation
+        initial_ua_snap=gsd.hoomd.open(job.sp.ua_snapshot)[0]
+        ua_sim = Simulation(initial_ua_snap, pps_ff, 
+                        dt=job.sp.dt,
+                         gsd_write_freq=job.sp.log_freq,
+                         gsd_file_name='UA_trajectory.gsd',
+                         log_write_freq=job.sp.log_freq,
+                         log_file_name='UA_log.txt')
+        print("UA Simulation...")
+        print("----------------------")
+        ua_sim.run_NVT(n_steps=job.sp.n_steps, kT=job.sp.kT, tau_kt=0.1, write_at_start=True)
+        ua_sim.flush_writers()
+                            
         job.doc["done"] = True
         print("-----------------------------")
         print("Simulation finished")
