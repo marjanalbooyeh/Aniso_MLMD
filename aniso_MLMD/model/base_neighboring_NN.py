@@ -202,7 +202,7 @@ class ForTorPredictorNN(nn.Module):
             neighbor_features,
             self.neighbor_pool)  # (B, N, neighbor_hidden_dim)
         if self.prior_force:
-            F_0 = torch.pow(self.prior_force_sigma / R, self.prior_force_n)
+            F_0 = self._calculate_prior_force(R)
             prediction = prediction + F_0.to(self.device)
 
         return prediction
