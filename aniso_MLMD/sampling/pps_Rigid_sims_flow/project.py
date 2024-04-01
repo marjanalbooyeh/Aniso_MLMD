@@ -261,7 +261,7 @@ def resume(job):
         for i in range(job.sp.n_tries):
             print('####################')
             print('Trying run: ', i)
-            rigid_sim.run(n_steps=job.sp.n_steps)
+            rigid_sim.run(job.sp.n_steps)
             for writer in rigid_sim.operations.writers:
                 if hasattr(writer, 'flush'):
                     writer.flush()
