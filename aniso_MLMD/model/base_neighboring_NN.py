@@ -182,7 +182,7 @@ class ForTorPredictorNN(nn.Module):
     def _calculate_prior_force(self, R):
         F_0 = (-1) * (self.prior_force_n / R) * torch.pow(
             self.prior_force_sigma/R, self.prior_force_n)
-        return F_0
+        return F_0.sum(dim=2)
 
     def forward(self, position, orientation_R, neighbor_list):
         # position: particle positions (B, N, 3)
@@ -203,6 +203,7 @@ class ForTorPredictorNN(nn.Module):
             self.neighbor_pool)  # (B, N, neighbor_hidden_dim)
         if self.prior_force:
             F_0 = self._calculate_prior_force(R)
+            
             prediction = prediction + F_0.to(self.device)
 
         return prediction
