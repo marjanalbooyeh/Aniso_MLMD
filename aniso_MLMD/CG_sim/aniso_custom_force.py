@@ -24,7 +24,11 @@ class AnisoNeighborCustomForce(hoomd.md.force.Custom):
                                    dropout=best_force_job.sp.dropout,
                                    batch_norm=False,
                                    device=self.device,
-                                   neighbor_pool=best_force_job.sp.neighbor_pool)
+                                   neighbor_pool=best_force_job.sp.neighbor_pool,
+                                   prior_force=best_force_job.sp.prior_force,
+                                   prior_force_sigma=best_force_job.sp.prior_force_sigma,
+                                   prior_force_n=best_force_job.sp.prior_force_n
+                                   )
         self.force_model.to(self.device)
         self.force_model.load_state_dict(
             torch.load(best_force_job.fn("best_model_checkpoint.pth"),
