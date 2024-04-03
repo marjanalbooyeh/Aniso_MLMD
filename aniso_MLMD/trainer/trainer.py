@@ -2,7 +2,8 @@ import torch
 import torch.nn as nn
 import wandb
 
-from aniso_MLMD.trainer.data_loader import load_datasets, load_overfit_data
+from aniso_MLMD.trainer.data_loader import AnisoDataLoader, load_datasets, \
+    load_overfit_data
 from aniso_MLMD.model import ForTorPredictorNN, EnergyPredictor
 
 
@@ -23,6 +24,8 @@ class MLTrainer:
         self.batch_size = config.batch_size
         self.shrink = config.shrink
         self.overfit = config.overfit
+        self.processor_type = config.processor_type
+        self.scale_range = config.scale_range
 
         # model parameters
         self.in_dim = config.in_dim
@@ -70,12 +73,17 @@ class MLTrainer:
             "cuda:0" if torch.cuda.is_available() else "cpu")
 
         # create data loaders
-        if self.overfit:
-            self.train_dataloader = load_overfit_data(config.data_path,
-                                                      config.batch_size)
-        else:
-            self.train_dataloader, self.valid_dataloader, self.test_dataloader = load_datasets(
-                config.data_path, config.batch_size, shrink=self.shrink)
+        self.aniso_data_loader = AnisoDataLoader(config.data_path,
+                                                 config.batch_size,
+                                                 config.shrink,
+                                                 config.overfit,
+                                                 processor_type=config.processor_type,
+                                                 scale_range=config.scale_range)
+
+        self.train_dataloader = self.aniso_data_loader.get_train_dataset()
+        if not self.overfit:
+            self.valid_dataloader = self.aniso_data_loader.get_valid_dataset()
+            self.test_dataloader = self.aniso_data_loader.get_test_dataset()
 
         self.train_size = self.train_dataloader.dataset.__len__()
         self.n_batch = len(self.train_dataloader)
@@ -268,9 +276,10 @@ class MLTrainer:
         force_running_loss = 0.
         torque_running_loss = 0.
         for i, (
-        (positions, orientation_q, orientation_R, neighbor_list), target_force,
-        target_torque,
-        energy) in enumerate(
+                (positions, orientation_q, orientation_R,
+                 neighbor_list), target_force,
+                target_torque,
+                energy) in enumerate(
             self.train_dataloader):
 
             self.optimizer.zero_grad()
@@ -345,9 +354,10 @@ class MLTrainer:
         total_force_error = 0.
         total_torque_error = 0.
         for i, (
-        (positions, orientation_q, orientation_R, neighbor_list), target_force,
-        target_torque,
-        energy) in enumerate(
+                (positions, orientation_q, orientation_R, neighbor_list),
+                target_force,
+                target_torque,
+                energy) in enumerate(
             data_loader):
             positions.requires_grad = True
             orientation_R.requires_grad = True
@@ -357,11 +367,24 @@ class MLTrainer:
             _prediction = self.model(positions, orientation_R, neighbor_list)
             if self.target == "energy":
                 energy_prediction = _prediction
+
+                # force prediction
                 predicted_force = - torch.autograd.grad(energy_prediction.sum(),
                                                         positions,
                                                         create_graph=True)[
                     0].to(
                     self.device)
+                target_force = target_force.to(self.device)
+                if self.aniso_data_loader.force_scaler is not None:
+                    predicted_force = self.aniso_data_loader.force_scaler.inv_transform(
+                        predicted_force)
+                    target_force = self.aniso_data_loader.force_scaler.inv_transform(
+                        target_force)
+
+                force_error = self.criteria(predicted_force,
+                                            target_force).item()
+
+                # torque prediction
                 torque_grad = - torch.autograd.grad(energy_prediction.sum(),
                                                     orientation_R,
                                                     create_graph=True)[0]
@@ -369,22 +392,35 @@ class MLTrainer:
                 predicted_torque = self._calculate_torque(torque_grad,
                                                           orientation_R)
 
-                target_force = target_force.to(self.device)
                 target_torque = target_torque.to(self.device)
-                force_error = self.criteria(predicted_force,
-                                            target_force).item()
+                if self.aniso_data_loader.torque_scaler is not None:
+                    predicted_torque = self.aniso_data_loader.torque_scaler.inv_transform(
+                        predicted_torque)
+                    target_torque = self.aniso_data_loader.torque_scaler.inv_transform(
+                        target_torque)
+
                 torque_error = self.criteria(predicted_torque,
                                              target_torque).item()
 
                 total_error += (force_error + torque_error)
             elif self.target == "force":
                 target_val = target_force.to(self.device)
-                _error = self.criteria(_prediction, target_val).item()
-                total_error += _error
+                if self.aniso_data_loader.force_scaler is not None:
+                    _prediction = self.aniso_data_loader.force_scaler.inv_transform(
+                        _prediction)
+                    target_val = self.aniso_data_loader.force_scaler.inv_transform(
+                        target_val)
             else:
                 target_val = target_torque.to(self.device)
-                _error = self.criteria(_prediction, target_val).item()
-                total_error += _error
+                if self.aniso_data_loader.torque_scaler is not None:
+                    _prediction = self.aniso_data_loader.torque_scaler.inv_transform(
+                        _prediction)
+                    target_val = self.aniso_data_loader.torque_scaler.inv_transform(
+                        target_val)
+
+            _error = self.criteria(_prediction, target_val).item()
+            total_error += _error
+
 
             if print_output and i % 100 == 0:
                 print('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$')
