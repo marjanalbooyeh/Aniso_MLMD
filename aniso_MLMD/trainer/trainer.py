@@ -204,6 +204,8 @@ class MLTrainer:
             "overfit": self.overfit,
             "batch_size": self.batch_size,
             "shrink": self.shrink,
+            "processor_type": self.processor_type,
+            "scale_range": self.scale_range,
             "lr": self.lr,
             "in_dim": self.in_dim,
             "neighbor_hidden_dim": self.neighbor_hidden_dim,
