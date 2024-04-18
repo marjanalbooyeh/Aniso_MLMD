@@ -1,3 +1,6 @@
+import torch.multiprocessing
+torch.multiprocessing.set_sharing_strategy('file_system')
+
 import torch
 import torch.nn as nn
 import wandb
@@ -281,7 +284,6 @@ class MLTrainer:
                 target_torque,
                 energy) in enumerate(
             self.train_dataloader):
-
             self.optimizer.zero_grad()
             positions.requires_grad = True
             orientation_R.requires_grad = True
@@ -299,10 +301,8 @@ class MLTrainer:
                 torque_grad = - torch.autograd.grad(energy_prediction.sum(),
                                                     orientation_R,
                                                     create_graph=True)[0]
-
                 predicted_torque = self._calculate_torque(torque_grad,
                                                           orientation_R)
-
                 target_force = target_force.to(self.device)
                 target_torque = target_torque.to(self.device)
 
@@ -365,6 +365,7 @@ class MLTrainer:
             orientation_R = orientation_R.to(self.device)
 
             _prediction = self.model(positions, orientation_R, neighbor_list)
+
             if self.target == "energy":
                 energy_prediction = _prediction
 
@@ -402,7 +403,7 @@ class MLTrainer:
                 torque_error = self.criteria(predicted_torque,
                                              target_torque).item()
 
-                total_error += (force_error + torque_error)
+                _error = (force_error + torque_error)
             elif self.target == "force":
                 target_val = target_force.to(self.device)
                 if self.aniso_data_loader.force_scaler is not None:
@@ -410,6 +411,7 @@ class MLTrainer:
                         _prediction)
                     target_val = self.aniso_data_loader.force_scaler.inv_transform(
                         target_val)
+                _error = self.criteria(_prediction, target_val).item()
             else:
                 target_val = target_torque.to(self.device)
                 if self.aniso_data_loader.torque_scaler is not None:
@@ -417,8 +419,9 @@ class MLTrainer:
                         _prediction)
                     target_val = self.aniso_data_loader.torque_scaler.inv_transform(
                         target_val)
+                _error = self.criteria(_prediction, target_val).item()
 
-            _error = self.criteria(_prediction, target_val).item()
+            
             total_error += _error
 
 
@@ -491,6 +494,7 @@ class MLTrainer:
         for epoch in range(self.epochs):
 
             train_loss = self._train()
+
             # val_error = self._validation(self.valid_dataloader)
             # if self.use_scheduler:
             #     self.scheduler.step(val_error)

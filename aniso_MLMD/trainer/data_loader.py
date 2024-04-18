@@ -4,7 +4,8 @@ import numpy as np
 import pandas as pd
 import torch
 from torch.utils.data import Dataset, DataLoader
-
+import torch.multiprocessing
+torch.multiprocessing.set_sharing_strategy('file_system')
 
 class CustomTrajDataset(Dataset):
     def __init__(self, traj_df, force_scaler=None, torque_scaler=None):
@@ -28,6 +29,7 @@ class CustomTrajDataset(Dataset):
 
         self.force = torch.from_numpy(np.array(list(traj_df['force']))).type(
             torch.FloatTensor)
+        print(force_scaler)
         if force_scaler is not None:
             self.force = force_scaler.transform(self.force)
         self.torque = torch.from_numpy(np.array(list(traj_df['torque']))).type(
@@ -73,6 +75,8 @@ class MinMaxScaler:
     def inv_transform(self, data):
         n_sample, n_beads, _ = data.shape
         data = data.reshape(-1, 3)
+        self.X_min = self.X_min.to(data.device)
+        self.X_max = self.X_max.to(data.device)
         u = ((data - self.min) * (self.X_max - self.X_min)) / (
                 self.max - self.min)
         inv_transformed_data = u + self.X_min
