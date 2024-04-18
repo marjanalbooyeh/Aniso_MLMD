@@ -280,7 +280,8 @@ class EnergyPredictor(nn.Module):
             features)  # (B, N, N_neighbors, neighbor_hidden_dim)
         # pool over the neighbors dimension
         pooled_features = _pool_neighbors(
-            neighbor_features)  # (B, N, neighbor_hidden_dim)
+            neighbor_features,
+        self.neighbor_pool)  # (B, N, neighbor_hidden_dim)
         # deep set layer for particle pooling
         energy = self.energy_net(pooled_features)  # (B, 1)
         if self.prior_energy:
