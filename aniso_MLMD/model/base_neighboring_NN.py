@@ -17,11 +17,11 @@ def _get_act_fn(act_fn):
     return act()
 
 
-def _prep_features_rot_matrix(position,
-                              orientation_R,
-                              neighbor_list,
-                              box_len,
-                              device):
+def _features_v1(position,
+                 orientation_R,
+                 neighbor_list,
+                 box_len,
+                 device):
     """
 
     Parameters
@@ -118,6 +118,61 @@ def _prep_features_rot_matrix(position,
     return features.to(device), R
 
 
+def _features_v2(position,
+                 orientation_R,
+                 neighbor_list,
+                 box_len,
+                 device):
+    batch_size = position.shape[0]
+    N_particles = position.shape[1]
+
+    # change tuple based neighbor list to (B, N, neighbor_idx)
+    neighbor_list = neighbor_list.reshape(batch_size, N_particles, -1,
+                                          neighbor_list.shape[-1])[:, :, :,
+                    1].to(device)  # (B, N, N_neighbors)
+    N_neighbors = neighbor_list.shape[-1]
+    dr = neighbor_ops.neighbors_distance_vector(position,
+                                                neighbor_list)  # (B, N, N_neighbors, 3)
+    dr = neighbor_ops.adjust_periodic_boundary(dr, box_len)
+
+    R = torch.norm(dr, dim=-1, keepdim=True)  # (B, N, N_neighbors, 1)
+
+    ################ particle orientation and relative distance features ################
+    dr_orient_dot = neighbor_ops.dr_particle_orientation_dot_product(dr,
+                                                                     orientation_R)  # (B, N, N_neighbors, 3)
+
+    ################ neighbors orientation and relative distance features ################
+    # repeat the neighbors idx to match the shape of orientation_R. This
+    # is necessary to gather each particle's neighbors' orientation
+    NN_expanded = neighbor_list[:, :, :, None, None].expand(
+        (-1, -1, -1, 3, 3))  # (B, N, N_neighbors, 3, 3)
+    # repeart the orientation_R to match the shape of neighbor_list
+    orientation_R_expanded = orientation_R[:, :, None, :, :].expand(
+        (-1, -1, N_neighbors, -1, -1))  # (B, N, N_neighbors, 3, 3)
+    # get all neighbors' orientation
+    neighbors_orient_R = torch.gather(orientation_R_expanded, dim=1,
+                                      index=NN_expanded)  # (B, N, N_neighbors, 3, 3)
+
+    dr_Nb_orient_dot = neighbor_ops.dr_neighbor_orientation_dot_product(dr,
+                                                                        neighbors_orient_R)  # (B, N, N_neighbors, 3)
+
+    ################### Relative orientation features ###################
+    # dot product: (B, N, N_neighbors, 3, 3)
+    orient_dot_prod = neighbor_ops.orientation_dot_product(
+        orientation_R_expanded,
+        neighbors_orient_R)
+
+    # concatenate all features (B, N, N_neighbors, 19)
+    features = torch.cat((R,
+                          dr/R,
+                          dr_orient_dot,
+                          dr_Nb_orient_dot,
+                          orient_dot_prod.flatten(start_dim=-2),
+                          ),
+                         dim=-1)
+    return features.to(device), R
+
+
 def _pool_neighbors(neighbor_features, neighbor_pool):
     # neighbor_features: (B, N, N_neighbors, hidden_dim)
     if neighbor_pool == 'mean':
@@ -181,7 +236,7 @@ class ForTorPredictorNN(nn.Module):
 
     def _calculate_prior_force(self, R):
         F_0 = (-1) * (self.prior_force_n / R) * torch.pow(
-            self.prior_force_sigma/R, self.prior_force_n)
+            self.prior_force_sigma / R, self.prior_force_n)
         return F_0.sum(dim=2)
 
     def forward(self, position, orientation_R, neighbor_list):
@@ -190,10 +245,10 @@ class ForTorPredictorNN(nn.Module):
         # neighbor_list: list of neighbors for each particle
         # (B, N * N_neighbors, 2)
 
-        # features: (B, N, N_neighbors, 80)
-        features, R = _prep_features_rot_matrix(position, orientation_R,
-                                                neighbor_list, self.box_len,
-                                                self.device)
+        # features: (B, N, N_neighbors, in_dim)
+        features, R = _features_v2(position, orientation_R,
+                                   neighbor_list, self.box_len,
+                                   self.device)
 
         neighbor_features = self.neighbors_net(
             features)  # (B, N, N_neighbors, neighbor_hidden_dim)
@@ -203,7 +258,7 @@ class ForTorPredictorNN(nn.Module):
             self.neighbor_pool)  # (B, N, neighbor_hidden_dim)
         if self.prior_force:
             F_0 = self._calculate_prior_force(R)
-            
+
             prediction = prediction + F_0.to(self.device)
 
         return prediction
@@ -272,16 +327,16 @@ class EnergyPredictor(nn.Module):
         # neighbor_list: list of neighbors for each particle
         # (B, N * N_neighbors, 2)
 
-        # features: (B, N, N_neighbors, 80)
-        features, R = _prep_features_rot_matrix(position, orientation_R,
-                                                neighbor_list, self.box_len,
-                                                self.device)
+        # features: (B, N, N_neighbors, in_dim)
+        features, R = _features_v2(position, orientation_R,
+                                   neighbor_list, self.box_len,
+                                   self.device)
         neighbor_features = self.neighbors_net(
             features)  # (B, N, N_neighbors, neighbor_hidden_dim)
         # pool over the neighbors dimension
         pooled_features = _pool_neighbors(
             neighbor_features,
-        self.neighbor_pool)  # (B, N, neighbor_hidden_dim)
+            self.neighbor_pool)  # (B, N, neighbor_hidden_dim)
         # deep set layer for particle pooling
         energy = self.energy_net(pooled_features)  # (B, 1)
         if self.prior_energy:

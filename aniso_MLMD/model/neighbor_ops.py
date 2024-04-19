@@ -58,6 +58,44 @@ def orientation_dot_product(particle_orientations, neighbors_orientations):
     return dot_prod
 
 
+def dr_neighbors_orientation_dot_product(dr, neighbors_orientations):
+    """
+    Calculate the dot product of the distance vector between particles and their
+    neighbors with the neighbors orientations.
+    Parameters
+    ----------
+    dr: distance vector between particles and their neighbors
+     (B, N, N_neighbors, 3)
+    neighbors_orientations: neighbors orientation rotation matrix
+     (B, N, N_neighbors, 3, 3)
+
+    Returns
+    -------
+    dot product (B, N, N_neighbors, 3)
+    """
+
+    dot_prod = torch.einsum('ijkh, ijkhl -> ijkl', dr, neighbors_orientations)
+    return dot_prod
+
+def dr_particle_orientation_dot_product(dr, particle_orientations):
+    """
+    Calculate the dot product of the distance vector between particles and their
+    neighbors with the particle orientations.
+
+    Parameters
+    ----------
+    dr: distance vector between particles and their neighbors
+     (B, N, N_neighbors, 3)
+    particle_orientations: particle orientation rotation matrix repeated along
+     the neighbor axis (B, N, 3, 3)
+
+    Returns
+    -------
+    dot product (B, N, N_neighbors, 3)
+    """
+    dot_prod = torch.einsum('ijkh, ijhl -> ijkl', dr, particle_orientations)
+    return dot_prod
+
 def orientation_element_product(particle_orientations, neighbors_orientations):
     """
     Calculate the element wise product of the particle orientation columns with
