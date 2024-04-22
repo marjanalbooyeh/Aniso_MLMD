@@ -32,7 +32,7 @@ def get_parameters():
 
 
     # model parameters
-    parameters["in_dim"] = [18]
+    parameters["in_dim"] = [19]
     parameters["out_dim"] = [3]
 
     parameters["neighbor_hidden_dim"] = [32]
