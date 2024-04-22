@@ -25,7 +25,7 @@ def get_parameters():
     parameters["log"] = [False]
 
     # dataset parameters700
-    parameters["data_path"] =["/home/marjanalbooyeh/Aniso_ML_MD_project/ml_datasets/pps_300_N20/"]
+    parameters["data_path"] =["/home/marjanalbooyeh/Aniso_ML_MD_project/ml_datasets/pps_300_N15_balanced/"]
     parameters["batch_size"] = [64]
     parameters["shrink"] = [False]
     parameters["overfit"] = [True]
