@@ -120,7 +120,7 @@ def orientation_feature_vector_v1(position,
 def orientation_feature_vector_v2(position,
                                   orientation_R,
                                   neighbor_list,
-                                  box_len,
+                                  box_size,
                                   device):
     batch_size = position.shape[0]
     N_particles = position.shape[1]
@@ -132,7 +132,7 @@ def orientation_feature_vector_v2(position,
     N_neighbors = neighbor_list.shape[-1]
     dr = neighbor_ops.neighbors_distance_vector(position,
                                                 neighbor_list)  # (B, N, N_neighbors, 3)
-    dr = neighbor_ops.adjust_periodic_boundary(dr, box_len)
+    dr = neighbor_ops.adjust_periodic_boundary(dr, box_size)
 
     R = torch.norm(dr, dim=-1, keepdim=True)  # (B, N, N_neighbors, 1)
 

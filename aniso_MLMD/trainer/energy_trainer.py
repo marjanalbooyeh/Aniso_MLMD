@@ -48,7 +48,6 @@ class EnergyTrainer:
 
         self.dropout = config.dropout
         self.batch_norm = config.batch_norm
-        self.box_len = config.box_len
 
         # optimizer parameters
         self.optim = config.optim
@@ -154,7 +153,6 @@ class EnergyTrainer:
                                    neighbors_net_config=self.neighbors_net_config,
                                    prior_net_config=self.prior_net_config,
                                    energy_net_config=self.energy_net_config,
-                                   box_len=self.box_len,
                                    dropout=self.dropout,
                                    batch_norm=self.batch_norm,
                                    device=self.device)
@@ -182,7 +180,6 @@ class EnergyTrainer:
             "prior_net_config": self.prior_net_config,
             "energy_net_config": self.energy_net_config,
             "dropout": self.dropout,
-            "box_len": self.box_len,
             "batch_norm": self.batch_norm,
             "optim": self.optim,
             "decay": self.decay,
@@ -234,8 +231,8 @@ class EnergyTrainer:
         force_running_loss = 0.
         torque_running_loss = 0.
         for i, (
-                (positions, orientation_q, orientation_R,
-                 neighbor_list), target_force,
+                (positions, _, orientation_R,
+                 neighbor_list, box_size), target_force,
                 target_torque,
                 energy) in enumerate(
             self.train_dataloader):
@@ -246,7 +243,7 @@ class EnergyTrainer:
             orientation_R = orientation_R.to(self.device)
 
             predicted_force, predicted_torque, predicted_energy = self.model(
-                positions, orientation_R, neighbor_list)
+                positions, orientation_R, neighbor_list, box_size)
 
             target_force = target_force.to(self.device)
             target_torque = target_torque.to(self.device)
@@ -287,7 +284,7 @@ class EnergyTrainer:
         total_force_error = 0.
         total_torque_error = 0.
         for i, (
-                (positions, orientation_q, orientation_R, neighbor_list),
+                (positions, _, orientation_R, neighbor_list, box_size),
                 target_force,
                 target_torque,
                 energy) in enumerate(
@@ -298,7 +295,7 @@ class EnergyTrainer:
             orientation_R = orientation_R.to(self.device)
 
             predicted_force, predicted_torque, predicted_energy = self.model(
-                positions, orientation_R, neighbor_list)
+                positions, orientation_R, neighbor_list, box_size)
 
             target_force = target_force.to(self.device)
             force_error = self.criteria(predicted_force,

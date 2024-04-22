@@ -24,6 +24,9 @@ class CustomTrajDataset(Dataset):
         self.neighbor_list = torch.from_numpy(
             np.asarray(list(traj_df['neighbor_list'])).astype(np.int64))
 
+        self.box_size = torch.from_numpy(
+            np.array(list(traj_df['box_size']))).type(torch.FloatTensor).reshape(-1, 1)
+
         self.energy = torch.from_numpy(np.array(list(traj_df['energy']))).type(
             torch.FloatTensor)
 
@@ -44,7 +47,7 @@ class CustomTrajDataset(Dataset):
         return (
             (
                 self.position[i], self.orientation_q[i],
-                self.orientation_R[i], self.neighbor_list[i]
+                self.orientation_R[i], self.neighbor_list[i], self.box_size[i]
             ),
             self.force[i], self.torque[i], self.energy[i]
         )

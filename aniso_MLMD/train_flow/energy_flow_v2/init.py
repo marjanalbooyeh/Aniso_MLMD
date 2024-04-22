@@ -51,7 +51,6 @@ def get_parameters():
 
     parameters["dropout"] = [0.3]
     parameters["batch_norm"] = [False]
-    parameters["box_len"] = [15.769099]
 
     # optimizer parameters
     parameters["optim"] = ["Adam"]

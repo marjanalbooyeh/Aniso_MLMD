@@ -95,7 +95,6 @@ class EnergyPredictor_v2(nn.Module):
                  neighbors_net_config,
                  prior_net_config,
                  energy_net_config,
-                 box_len,
                  dropout=0.3,
                  batch_norm=True,
                  device=None,
@@ -115,7 +114,6 @@ class EnergyPredictor_v2(nn.Module):
         self.energy_n_layers = energy_net_config['n_layers']
         self.energy_act_fn = energy_net_config['act_fn']
 
-        self.box_len = box_len
         self.dropout = dropout
         self.device = device
         self.in_dim = in_dim
@@ -159,11 +157,12 @@ class EnergyPredictor_v2(nn.Module):
             nn.Linear(h_dim, out_dim))
         return nn.Sequential(*layers)
 
-    def forward(self, position, orientation_R, neighbor_list):
+    def forward(self, position, orientation_R, neighbor_list, box_size):
         # position: particle positions (B, N, 3)
         # orientation_R: particle orientation rotation matrix (B, N, 3, 3)
         # neighbor_list: list of neighbors for each particle
         # (B, N * N_neighbors, 2)
+        # box_size: (B , 1)
 
         ##################### Neighbors NET #####################
         # features: (B, N, N_neighbors, in_dim-1)
@@ -171,7 +170,7 @@ class EnergyPredictor_v2(nn.Module):
             position,
             orientation_R,
             neighbor_list,
-            self.box_len,
+            box_size,
             self.device)
 
         d = torch.cat((R, features), dim=-1)
