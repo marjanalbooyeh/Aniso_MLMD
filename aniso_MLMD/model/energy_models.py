@@ -120,7 +120,7 @@ class EnergyPredictor_v2(nn.Module):
         self.out_dim = out_dim
         self.batch_norm = batch_norm
 
-        self.neighbors_net = self._MLP_net(in_dim=self.in_dim+1,
+        self.neighbors_net = self._MLP_net(in_dim=self.in_dim,
                                            h_dim=self.neighbor_hidden_dim,
                                            out_dim=self.out_dim,
                                            n_layers=self.neighbors_n_layers,
@@ -142,8 +142,8 @@ class EnergyPredictor_v2(nn.Module):
                                         act_fn=self.energy_act_fn,
                                         dropout=self.dropout).to(self.device)
 
-        self.prior_energy_factor_1 =torch.nn.Parameter(torch.rand(1, 3), requires_grad=True)
-        self.prior_energy_factor_2 =torch.nn.Parameter(torch.rand(1, 3), requires_grad=True)
+        # self.prior_energy_factor_1 =torch.nn.Parameter(torch.rand(1, 3), requires_grad=True)
+        # self.prior_energy_factor_2 =torch.nn.Parameter(torch.rand(1, 3), requires_grad=True)
 
     def _MLP_net(self, in_dim, h_dim, out_dim,
                  n_layers, act_fn, dropout):
@@ -187,13 +187,13 @@ class EnergyPredictor_v2(nn.Module):
 
         ##################### Prior Energy NET #####################
 
-        U_0 = self.prior_net(features)  # (B, N, N_neighbors, out_dim)
+        U_0 = self.prior_net(d)  # (B, N, N_neighbors, out_dim)
         pooled_U_0 = base_model_utils.pool_neighbors(
-            R - U_0,
+            U_0,
             self.neighbor_pool)  # (B, N, out_dim)
-        pooled_U_0 = (epsilon + (self.prior_energy_factor_1**2) *
-               (pooled_U_0[:, :, None, :] ** (epsilon + self.prior_energy_factor_2**2)))
-        pooled_U_0 = pooled_U_0.squeeze(2)
+        # pooled_U_0 = (epsilon + (self.prior_energy_factor_1) *
+        #        (pooled_U_0[:, :, None, :] ** (epsilon + self.prior_energy_factor_2)))
+        # pooled_U_0 = pooled_U_0.squeeze(2)
         ##################### Energy NET #####################
         energy_feature = (particle_features) + (pooled_U_0)
         predicted_energy = self.energy_net(energy_feature)  # (B, N, 1)

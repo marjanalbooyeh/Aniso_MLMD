@@ -7,15 +7,15 @@ parameters["group"] = "energy-V2"
 parameters["log"] = False
 
 # dataset parameters700
-parameters["data_path"] ="/home/marjan/Documents/fry/ml_dataset/pps_300_N15_regular"
+parameters["data_path"] ="/home/marjan/Documents/fry/ml_dataset/pps_300_N15_balanced"
 parameters["batch_size"] = 10
 parameters["shrink"] = False
 parameters["overfit"] = True
 
 
 # model parameters
-parameters["in_dim"] = 18
-parameters["out_dim"] = 3
+parameters["in_dim"] = 19
+parameters["out_dim"] = 128
 
 parameters["neighbor_hidden_dim"] = 256
 parameters["neighbor_pool"] = "sum"
