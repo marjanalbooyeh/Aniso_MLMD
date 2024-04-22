@@ -2,46 +2,54 @@ from collections import OrderedDict
 parameters = OrderedDict()
 
 # project parameters
-parameters["project"] = "pps-20-new"
-parameters["group"] = "rotation_matrix"
-parameters["notes"] = "Learning pps forces and torques"
-parameters["tags"] = "random sampling"
+parameters["project"] = "pps-energy-Apr22"
+parameters["group"] = "energy-V2"
+parameters["log"] = False
 
-# dataset parameters
-parameters["data_path"] = "/home/marjan/Documents/code-base/ml_datasets/pps_20_new"
-parameters["batch_size"] = 2
+# dataset parameters700
+parameters["data_path"] ="/home/marjanalbooyeh/Aniso_ML_MD_project/ml_datasets/pps_300_N20/"
+parameters["batch_size"] = 64
 parameters["shrink"] = False
-parameters["overfit"] = False
+parameters["overfit"] = True
+
 
 # model parameters
-# supported model types: "NN", "NNSkipShared", "NNGrow"
-parameters["in_dim"] = 80
-parameters["neighbor_hidden_dim"] = 64
-parameters["particle_hidden_dim"] = 64
-parameters["n_layer"] = 2
-parameters["act_fn"] = "Tanh"
+parameters["in_dim"] = 18
+parameters["out_dim"] = 3
+
+parameters["neighbor_hidden_dim"] = 32
+parameters["neighbor_pool"] = "sum"
+parameters["neighbors_n_layers"] = 3
+parameters["neighbors_act_fn"] = "Tanh"
+
+parameters["prior_hidden_dim"] = 32
+parameters["prior_n_layers"] = 3
+parameters["prior_act_fn"] = "Tanh"
+
+parameters["energy_hidden_dim"] = 3
+parameters["energy_n_layers"] = 2
+parameters["energy_act_fn"] = "Tanh"
+
+
 parameters["dropout"] = 0.3
 parameters["batch_norm"] = False
-parameters["neighbor_pool"] = "mean"
-parameters["particle_pool"] = "sum1"
-parameters["box_len"] = 16.17887
-
+parameters["box_len"] = 15.769099
 
 # optimizer parameters
 parameters["optim"] = "Adam"
 parameters["lr"] = 0.001
-parameters["min_lr"] = 0.00001
-parameters["use_scheduler"] = False
-parameters["scheduler_type"] = "StepLR"
-parameters["decay"] = 0.001
+parameters["min_lr"] = 0.0001
+parameters["use_scheduler"] = True
+parameters["scheduler_type"] = "ReduceLROnPlateau"
+parameters["scheduler_patience"] = 50
+parameters["scheduler_threshold"] = 20
+parameters["decay"] = 0.0001
 # supported loss types: "mse" (mean squared error), "mae" (means absolute error)
 parameters["loss_type"] = "mse"
-parameters["prior_energy"] = True
-parameters["prior_energy_sigma"] = 1
-parameters["prior_energy_n"] = 6
+parameters["clipping"] = True
 
 # run parameters
-parameters["epochs"] = 50000
+parameters["epochs"] = 5000
 
 class Struct:
     def __init__(self, **entries):
@@ -51,7 +59,7 @@ config = Struct(**parameters)
 
 job_id = 0
 
-from aniso_MLMD.trainer import MLTrainer
-trainer_obj = MLTrainer(config, job_id)
+from aniso_MLMD.trainer import EnergyTrainer
+trainer_obj = EnergyTrainer(config, job_id)
 trainer_obj.run()
 

@@ -122,7 +122,7 @@ class EnergyPredictor_v2(nn.Module):
         self.out_dim = out_dim
         self.batch_norm = batch_norm
 
-        self.neighbors_net = self._MLP_net(in_dim=self.in_dim,
+        self.neighbors_net = self._MLP_net(in_dim=self.in_dim+1,
                                            h_dim=self.neighbor_hidden_dim,
                                            out_dim=self.out_dim,
                                            n_layers=self.neighbors_n_layers,
@@ -132,12 +132,12 @@ class EnergyPredictor_v2(nn.Module):
 
         self.prior_net = self._MLP_net(in_dim=self.in_dim,
                                        h_dim=self.prior_hidden_dim,
-                                       out_dim=self.prior_out_dim,
+                                       out_dim=self.out_dim,
                                        n_layers=self.prior_n_layers,
                                        act_fn=self.prior_act_fn,
                                        dropout=self.dropout).to(self.device)
 
-        self.energy_net = self._MLP_net(in_dim=self.energy_hidden_dim,
+        self.energy_net = self._MLP_net(in_dim=self.out_dim,
                                         h_dim=self.energy_hidden_dim,
                                         out_dim=1,
                                         n_layers=self.energy_n_layers,
@@ -190,6 +190,7 @@ class EnergyPredictor_v2(nn.Module):
             U_0,
             self.neighbor_pool)  # (B, N, out_dim)
 
+        ##################### Energy NET #####################
         energy_feature = particle_features + pooled_U_0
         predicted_energy = self.energy_net(energy_feature)  # (B, N, 1)
 

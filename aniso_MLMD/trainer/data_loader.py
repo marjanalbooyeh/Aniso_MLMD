@@ -94,6 +94,9 @@ class AnisoDataLoader:
         self.processor_type = processor_type
 
         self.train_df = pd.read_pickle(os.path.join(data_path, 'train.pkl'))
+        if self.overfit:
+            self.train_df = self.train_df.sample(frac=0.01).reset_index(drop=True)
+            print("Training dataset shrunk to ", self.train_df.shape)
         self.val_df = pd.read_pickle(os.path.join(data_path, 'val.pkl'))
         self.test_df = pd.read_pickle(os.path.join(data_path, 'test.pkl'))
 
