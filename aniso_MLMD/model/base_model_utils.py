@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import aniso_MLMD.model.neighbor_ops as neighbor_ops
 
-from aniso_MLMD.model.deep_set_layer import DTanh
+
 
 
 def init_net_weights(m):
@@ -12,16 +12,16 @@ def init_net_weights(m):
         m.bias.data.fill_(0.01)
 
 
-def _get_act_fn(act_fn):
+def get_act_fn(act_fn):
     act = getattr(nn, act_fn)
     return act()
 
 
-def _features_v1(position,
-                 orientation_R,
-                 neighbor_list,
-                 box_len,
-                 device):
+def orientation_feature_vector_v1(position,
+                                  orientation_R,
+                                  neighbor_list,
+                                  box_len,
+                                  device):
     """
 
     Parameters
@@ -118,11 +118,11 @@ def _features_v1(position,
     return features.to(device), R
 
 
-def _features_v2(position,
-                 orientation_R,
-                 neighbor_list,
-                 box_len,
-                 device):
+def orientation_feature_vector_v2(position,
+                                  orientation_R,
+                                  neighbor_list,
+                                  box_len,
+                                  device):
     batch_size = position.shape[0]
     N_particles = position.shape[1]
 
@@ -173,174 +173,28 @@ def _features_v2(position,
     return features.to(device), R
 
 
-def _pool_neighbors(neighbor_features, neighbor_pool):
+def pool_neighbors(neighbor_features, pool_type):
     # neighbor_features: (B, N, N_neighbors, hidden_dim)
-    if neighbor_pool == 'mean':
+    if pool_type == 'mean':
         return neighbor_features.mean(dim=2)
-    elif neighbor_pool == 'max':
+    elif pool_type == 'max':
         return neighbor_features.max(dim=2)[0]
-    elif neighbor_pool == 'sum':
+    elif pool_type == 'sum':
         return neighbor_features.sum(dim=2)
     else:
         raise ValueError('Invalid neighbor pooling method')
 
 
-def _pool_particles(pooled_features, particle_pool):
+def pool_particles(pooled_features, pool_type):
     # pooled_features: (B, N, neighbor_hidden_dim)
-    if particle_pool == 'mean':
+    if pool_type == 'mean':
         return pooled_features.mean(dim=1)
-    elif particle_pool == 'max':
+    elif pool_type == 'max':
         return pooled_features.max(dim=1)[0]
-    elif particle_pool == 'sum':
+    elif pool_type == 'sum':
         return pooled_features.sum(dim=1)
     else:
         raise ValueError('Invalid neighbor pooling method')
 
 
-class ForTorPredictorNN(nn.Module):
-    def __init__(self, in_dim, neighbor_hidden_dim,
-                 n_layers, box_len,
-                 act_fn="ReLU",
-                 dropout=0.3, batch_norm=True, device=None,
-                 neighbor_pool="mean", prior_force=False, prior_force_sigma=1.0,
-                 prior_force_n=12):
-        super(ForTorPredictorNN, self).__init__()
-        self.neighbor_hidden_dim = neighbor_hidden_dim
-        self.energy_out_dim = 1
-        self.n_layers = n_layers
-        self.box_len = box_len
-        self.act_fn = act_fn
-        self.dropout = dropout
-        self.device = device
-        self.in_dim = in_dim
-        self.batch_norm = batch_norm
-        self.neighbor_pool = neighbor_pool
-        self.prior_force = prior_force
-        self.prior_force_sigma = prior_force_sigma
-        self.prior_force_n = prior_force_n
 
-        self.neighbors_net = self._neighbors_net().to(self.device)
-
-    def _neighbors_net(self):
-        layers = [nn.Linear(self.in_dim, self.neighbor_hidden_dim),
-                  _get_act_fn(self.act_fn)]
-        for i in range(self.n_layers - 1):
-            layers.append(
-                nn.Linear(self.neighbor_hidden_dim, self.neighbor_hidden_dim))
-            if self.batch_norm:
-                layers.append(nn.BatchNorm1d(self.neighbor_hidden_dim))
-            layers.append(_get_act_fn(self.act_fn))
-            layers.append(nn.Dropout(p=self.dropout))
-        layers.append(nn.Linear(self.neighbor_hidden_dim, 3))
-        return nn.Sequential(*layers)
-
-    def _calculate_prior_force(self, R):
-        F_0 = (-1) * (self.prior_force_n / R) * torch.pow(
-            self.prior_force_sigma / R, self.prior_force_n)
-        return F_0.sum(dim=2)
-
-    def forward(self, position, orientation_R, neighbor_list):
-        # position: particle positions (B, N, 3)
-        # orientation_R: particle orientation rotation matrix (B, N, 3, 3)
-        # neighbor_list: list of neighbors for each particle
-        # (B, N * N_neighbors, 2)
-
-        # features: (B, N, N_neighbors, in_dim)
-        features, R = _features_v2(position, orientation_R,
-                                   neighbor_list, self.box_len,
-                                   self.device)
-
-        neighbor_features = self.neighbors_net(
-            features)  # (B, N, N_neighbors, neighbor_hidden_dim)
-        # pool over the neighbors dimension
-        prediction = _pool_neighbors(
-            neighbor_features,
-            self.neighbor_pool)  # (B, N, neighbor_hidden_dim)
-        if self.prior_force:
-            F_0 = self._calculate_prior_force(R)
-
-            prediction = prediction + F_0.to(self.device)
-
-        return prediction
-
-
-class EnergyPredictor(nn.Module):
-    def __init__(self, in_dim,
-                 neighbor_hidden_dim,
-                 particle_hidden_dim,
-                 n_layers,
-                 box_len,
-                 act_fn="ReLU",
-                 dropout=0.3,
-                 batch_norm=True,
-                 device=None,
-                 neighbor_pool="mean",
-                 particle_pool='max1',
-                 prior_energy=True,
-                 prior_energy_sigma=1.0, prior_energy_n=12
-                 ):
-        super(EnergyPredictor, self).__init__()
-        self.neighbor_hidden_dim = neighbor_hidden_dim
-        self.particle_hidden_dim = particle_hidden_dim
-        self.energy_out_dim = 1
-        self.n_layers = n_layers
-        self.box_len = box_len
-        self.act_fn = act_fn
-        self.dropout = dropout
-        self.device = device
-        self.in_dim = in_dim
-        self.batch_norm = batch_norm
-        self.particle_pool = particle_pool
-        self.neighbor_pool = neighbor_pool
-        self.prior_energy = prior_energy
-        self.prior_energy_sigma = prior_energy_sigma
-        self.prior_energy_n = prior_energy_n
-
-        self.neighbors_net = self._neighbors_net().to(self.device)
-
-        self.energy_net = DTanh(d_dim=self.particle_hidden_dim,
-                                x_dim=self.neighbor_hidden_dim,
-                                pool=self.particle_pool,
-                                dropout=self.dropout).to(self.device)
-
-    def _neighbors_net(self):
-        layers = [nn.Linear(self.in_dim, self.neighbor_hidden_dim),
-                  _get_act_fn(self.act_fn)]
-        for i in range(self.n_layers - 1):
-            layers.append(
-                nn.Linear(self.neighbor_hidden_dim, self.neighbor_hidden_dim))
-            if self.batch_norm:
-                layers.append(nn.BatchNorm1d(self.neighbor_hidden_dim))
-            layers.append(_get_act_fn(self.act_fn))
-            layers.append(nn.Dropout(p=self.dropout))
-        layers.append(
-            nn.Linear(self.neighbor_hidden_dim, self.neighbor_hidden_dim))
-        return nn.Sequential(*layers)
-
-    def _calculate_prior_energy(self, R):
-        U_0 = torch.pow(self.prior_energy_sigma / R, self.prior_energy_n)
-        return U_0.sum(dim=2).sum(dim=1)
-
-    def forward(self, position, orientation_R, neighbor_list):
-        # position: particle positions (B, N, 3)
-        # orientation_R: particle orientation rotation matrix (B, N, 3, 3)
-        # neighbor_list: list of neighbors for each particle
-        # (B, N * N_neighbors, 2)
-
-        # features: (B, N, N_neighbors, in_dim)
-        features, R = _features_v2(position, orientation_R,
-                                   neighbor_list, self.box_len,
-                                   self.device)
-        neighbor_features = self.neighbors_net(
-            features)  # (B, N, N_neighbors, neighbor_hidden_dim)
-        # pool over the neighbors dimension
-        pooled_features = _pool_neighbors(
-            neighbor_features,
-            self.neighbor_pool)  # (B, N, neighbor_hidden_dim)
-        # deep set layer for particle pooling
-        energy = self.energy_net(pooled_features)  # (B, 1)
-        if self.prior_energy:
-            U_0 = self._calculate_prior_energy(R)
-            energy = energy + U_0.to(self.device)
-
-        return energy
