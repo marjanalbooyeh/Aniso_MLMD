@@ -96,25 +96,19 @@ class EnergyTrainer:
 
         # create loss, optimizer and schedule
         if self.loss_type == "mae":
-            if self.target == "energy":
-                self.force_loss = nn.L1Loss().to(self.device)
-                self.torque_loss = nn.L1Loss().to(self.device)
-            else:
-                self.target_loss = nn.L1Loss().to(self.device)
+            self.force_loss = nn.L1Loss().to(self.device)
+            self.torque_loss = nn.L1Loss().to(self.device)
+
             self.criteria = nn.L1Loss().to(self.device)
         elif self.loss_type == "mse":
-            if self.target == "energy":
-                self.force_loss = nn.MSELoss().to(self.device)
-                self.torque_loss = nn.MSELoss().to(self.device)
-            else:
-                self.target_loss = nn.MSELoss().to(self.device)
+            self.force_loss = nn.MSELoss().to(self.device)
+            self.torque_loss = nn.MSELoss().to(self.device)
+
             self.criteria = nn.MSELoss().to(self.device)
         elif self.loss_type == "huber":
-            if self.target == "energy":
-                self.force_loss = nn.HuberLoss(delta=5).to(self.device)
-                self.torque_loss = nn.HuberLoss(delta=5).to(self.device)
-            else:
-                self.target_loss = nn.HuberLoss(delta=5).to(self.device)
+            self.force_loss = nn.HuberLoss(delta=5).to(self.device)
+            self.torque_loss = nn.HuberLoss(delta=5).to(self.device)
+
             self.criteria = nn.HuberLoss(delta=5).to(self.device)
 
         if self.optim == "Adam":

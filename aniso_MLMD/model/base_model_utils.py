@@ -152,7 +152,7 @@ def orientation_feature_vector_v2(position,
     neighbors_orient_R = torch.gather(orientation_R_expanded, dim=1,
                                       index=NN_expanded)  # (B, N, N_neighbors, 3, 3)
 
-    dr_Nb_orient_dot = neighbor_ops.dr_neighbor_orientation_dot_product(dr,
+    dr_Nb_orient_dot = neighbor_ops.dr_neighbors_orientation_dot_product(dr,
                                                                         neighbors_orient_R)  # (B, N, N_neighbors, 3)
 
     ################### Relative orientation features ###################

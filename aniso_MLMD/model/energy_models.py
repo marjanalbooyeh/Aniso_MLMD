@@ -142,6 +142,9 @@ class EnergyPredictor_v2(nn.Module):
                                         act_fn=self.energy_act_fn,
                                         dropout=self.dropout).to(self.device)
 
+        self.prior_energy_factor_1 =torch.nn.Parameter(torch.rand(1, 3), requires_grad=True)
+        self.prior_energy_factor_2 =torch.nn.Parameter(torch.rand(1, 3), requires_grad=True)
+
     def _MLP_net(self, in_dim, h_dim, out_dim,
                  n_layers, act_fn, dropout):
         layers = [nn.Linear(in_dim, h_dim),
@@ -163,7 +166,7 @@ class EnergyPredictor_v2(nn.Module):
         # neighbor_list: list of neighbors for each particle
         # (B, N * N_neighbors, 2)
         # box_size: (B , 1)
-
+        epsilon = 1e-8
         ##################### Neighbors NET #####################
         # features: (B, N, N_neighbors, in_dim-1)
         features, R, dr = base_model_utils.orientation_feature_vector_v2(
@@ -186,15 +189,17 @@ class EnergyPredictor_v2(nn.Module):
 
         U_0 = self.prior_net(features)  # (B, N, N_neighbors, out_dim)
         pooled_U_0 = base_model_utils.pool_neighbors(
-            U_0,
+            R - U_0,
             self.neighbor_pool)  # (B, N, out_dim)
-
+        pooled_U_0 = (epsilon + (self.prior_energy_factor_1**2) *
+               (pooled_U_0[:, :, None, :] ** (epsilon + self.prior_energy_factor_2**2)))
+        pooled_U_0 = pooled_U_0.squeeze(2)
         ##################### Energy NET #####################
-        energy_feature = particle_features + pooled_U_0
+        energy_feature = (particle_features) + (pooled_U_0)
         predicted_energy = self.energy_net(energy_feature)  # (B, N, 1)
 
         ################## Calculate Force ##################
-        neighbors_force = - torch.autograd.grad(predicted_energy.sum(dim=1),
+        neighbors_force = - torch.autograd.grad(predicted_energy.sum(dim=1).sum(),
                                                 dr,
                                                 create_graph=True)[0].to(
             self.device)  # (B, N, N_neighbors, 3)
@@ -203,7 +208,7 @@ class EnergyPredictor_v2(nn.Module):
 
 
         ################## Calculate Torque ##################
-        torque_grad = - torch.autograd.grad(predicted_energy.sum(dim=1),
+        torque_grad = - torch.autograd.grad(predicted_energy.sum(dim=1).sum(),
                                             orientation_R,
                                             create_graph=True)[0].to(
             self.device) # (B, N, 3, 3)

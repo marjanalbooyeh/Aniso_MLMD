@@ -7,8 +7,8 @@ parameters["group"] = "energy-V2"
 parameters["log"] = False
 
 # dataset parameters700
-parameters["data_path"] ="/home/marjanalbooyeh/Aniso_ML_MD_project/ml_datasets/pps_300_N20/"
-parameters["batch_size"] = 64
+parameters["data_path"] ="/home/marjan/Documents/fry/ml_dataset/pps_300_N15_regular"
+parameters["batch_size"] = 10
 parameters["shrink"] = False
 parameters["overfit"] = True
 
@@ -17,16 +17,16 @@ parameters["overfit"] = True
 parameters["in_dim"] = 18
 parameters["out_dim"] = 3
 
-parameters["neighbor_hidden_dim"] = 32
+parameters["neighbor_hidden_dim"] = 256
 parameters["neighbor_pool"] = "sum"
-parameters["neighbors_n_layers"] = 3
+parameters["neighbors_n_layers"] = 2
 parameters["neighbors_act_fn"] = "Tanh"
 
-parameters["prior_hidden_dim"] = 32
-parameters["prior_n_layers"] = 3
+parameters["prior_hidden_dim"] = 256
+parameters["prior_n_layers"] = 2
 parameters["prior_act_fn"] = "Tanh"
 
-parameters["energy_hidden_dim"] = 3
+parameters["energy_hidden_dim"] = 64
 parameters["energy_n_layers"] = 2
 parameters["energy_act_fn"] = "Tanh"
 
@@ -36,7 +36,7 @@ parameters["batch_norm"] = False
 
 # optimizer parameters
 parameters["optim"] = "Adam"
-parameters["lr"] = 0.001
+parameters["lr"] = 0.01
 parameters["min_lr"] = 0.0001
 parameters["use_scheduler"] = True
 parameters["scheduler_type"] = "ReduceLROnPlateau"
