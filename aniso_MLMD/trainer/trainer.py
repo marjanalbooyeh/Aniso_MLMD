@@ -7,7 +7,7 @@ import wandb
 
 from aniso_MLMD.trainer.data_loader import AnisoDataLoader, load_datasets, \
     load_overfit_data
-from aniso_MLMD.model import ForTorPredictorNN, EnergyPredictor
+from aniso_MLMD.model import ForTorPredictor_v1, EnergyPredictor_v1
 
 
 class MLTrainer:
@@ -156,7 +156,7 @@ class MLTrainer:
     def _create_model(self):
         if self.target == "energy":
 
-            model = EnergyPredictor(in_dim=self.in_dim,
+            model = EnergyPredictor_v1(in_dim=self.in_dim,
                                     neighbor_hidden_dim=self.neighbor_hidden_dim,
                                     particle_hidden_dim=self.particle_hidden_dim,
                                     box_len=self.box_len,
@@ -172,7 +172,7 @@ class MLTrainer:
                                     prior_energy_n=self.prior_energy_n
                                     )
         else:
-            model = ForTorPredictorNN(in_dim=self.in_dim,
+            model = ForTorPredictor_v1(in_dim=self.in_dim,
                                       neighbor_hidden_dim=self.neighbor_hidden_dim,
                                       box_len=self.box_len,
                                       n_layers=self.n_layer,

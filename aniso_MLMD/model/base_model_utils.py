@@ -1,8 +1,7 @@
 import torch
 import torch.nn as nn
+
 import aniso_MLMD.model.neighbor_ops as neighbor_ops
-
-
 
 
 def init_net_weights(m):
@@ -162,15 +161,15 @@ def orientation_feature_vector_v2(position,
         orientation_R_expanded,
         neighbors_orient_R)
 
-    # concatenate all features (B, N, N_neighbors, 19)
-    features = torch.cat((R,
-                          dr/R,
-                          dr_orient_dot,
-                          dr_Nb_orient_dot,
-                          orient_dot_prod.flatten(start_dim=-2),
-                          ),
-                         dim=-1)
-    return features.to(device), R
+    # concatenate all features (B, N, N_neighbors, 18)
+    features = torch.cat((
+        dr / R,
+        dr_orient_dot,
+        dr_Nb_orient_dot,
+        orient_dot_prod.flatten(start_dim=-2),
+    ),
+        dim=-1)
+    return features.to(device), R.to(device), dr.to(device)
 
 
 def pool_neighbors(neighbor_features, pool_type):
@@ -195,6 +194,3 @@ def pool_particles(pooled_features, pool_type):
         return pooled_features.sum(dim=1)
     else:
         raise ValueError('Invalid neighbor pooling method')
-
-
-

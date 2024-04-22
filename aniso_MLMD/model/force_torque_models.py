@@ -1,5 +1,6 @@
-import torch.nn as nn
 import torch
+import torch.nn as nn
+
 import aniso_MLMD.model.base_model_utils as base_model_utils
 
 
