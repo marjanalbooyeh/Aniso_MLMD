@@ -25,6 +25,9 @@ class ParticleConfigDataset(Dataset):
         self.force = torch.from_numpy(np.array(list(traj_df['force']))).type(
             torch.FloatTensor)
 
+        self.torque = torch.from_numpy(np.array(list(traj_df['torque']))).type(
+            torch.FloatTensor)
+
     def __len__(self):
         return len(self.dr)
 
