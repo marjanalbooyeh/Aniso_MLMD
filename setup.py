@@ -100,7 +100,8 @@ setup(
     packages=find_packages(exclude=('tests', 'docs',)),
     package_data = {"aniso_MLMD":
                     other_files,
-                    "iso_MLMD": other_files},
+                    "iso_MLMD": other_files,
+                    "aniso_per_particle": other_files,},
     install_requires=REQUIRED,
     include_package_data=True,
     license='MIT',
