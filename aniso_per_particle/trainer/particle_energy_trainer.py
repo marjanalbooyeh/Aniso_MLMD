@@ -7,13 +7,13 @@ import torch.nn as nn
 import wandb
 
 from aniso_per_particle.trainer.data_loader import AnisoParticleDataLoader
-from aniso_per_particle.model import ParticleEnergyPredictor
+from aniso_per_particle.model import ParticleEnergyPredictorHuang
 
 
 class EnergyTrainer:
-    def __init__(self, config, job_id, resume=False):
+    def __init__(self, config, job_id,):
         print("***************CUDA: ", torch.cuda.is_available())
-        self.resume = resume
+        self.resume = config.resume
         self.job_id = job_id
         self.project = config.project
         self.group = config.group
@@ -27,13 +27,7 @@ class EnergyTrainer:
 
         # model parameters
         self.in_dim = config.in_dim
-        self.out_dim = config.out_dim
-        self.neighbors_net_config = {
-            "hidden_dim": config.neighbor_hidden_dim,
-            "pool": config.neighbor_pool,
-            "n_layers": config.neighbors_n_layers,
-            "act_fn": config.neighbors_act_fn
-        }
+
         self.prior_net_config = {
             "hidden_dim": config.prior_hidden_dim,
             "n_layers": config.prior_n_layers,
@@ -117,7 +111,7 @@ class EnergyTrainer:
 
         self.set_scheduler()
 
-        if resume:
+        if self.resume:
             self.load_last_state()
 
         self.wandb_config = self._create_config()
@@ -137,14 +131,12 @@ class EnergyTrainer:
 
     def _create_model(self):
 
-        model = ParticleEnergyPredictor(in_dim=self.in_dim,
-                                   out_dim=self.out_dim,
-                                   neighbors_net_config=self.neighbors_net_config,
-                                   prior_net_config=self.prior_net_config,
-                                   energy_net_config=self.energy_net_config,
-                                   dropout=self.dropout,
-                                   batch_norm=self.batch_norm,
-                                   device=self.device)
+        model = ParticleEnergyPredictorHuang(in_dim=self.in_dim,
+                                             prior_net_config=self.prior_net_config,
+                                             energy_net_config=self.energy_net_config,
+                                             dropout=self.dropout,
+                                             batch_norm=self.batch_norm,
+                                             device=self.device)
         model.to(self.device)
         return model
 
@@ -164,8 +156,6 @@ class EnergyTrainer:
             "train_idx": self.train_idx,
             "lr": self.lr,
             "in_dim": self.in_dim,
-            "out_dim": self.out_dim,
-            "neighbor_net_config": self.neighbors_net_config,
             "prior_net_config": self.prior_net_config,
             "energy_net_config": self.energy_net_config,
             "dropout": self.dropout,
@@ -196,10 +186,10 @@ class EnergyTrainer:
             self.wandb_run_path = self.wandb_run.path
             self.wandb_run.summary["job_id"] = self.job_id
             self.wandb_run.summary["data_path"] = self.data_path
+            self.wandb_run.summary["train_idx"] = self.train_idx
             self.wandb_run.summary["in_dim"] = self.in_dim
             self.wandb_run.summary["train_size"] = self.train_size
             self.wandb_run.summary["valid_size"] = self.valid_size
-            self.wandb_run.summary["test_size"] = self.test_size
 
     def clip_grad(self, model, max_norm):
         total_norm = 0
@@ -246,7 +236,8 @@ class EnergyTrainer:
             running_loss += _loss.item()
 
             _loss.backward()
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), 5)
+            if self.clipping:
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), 5)
             self.optimizer.step()
 
             if i % 100 == 99:
