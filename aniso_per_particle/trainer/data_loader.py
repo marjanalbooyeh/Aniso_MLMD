@@ -60,7 +60,7 @@ class AnisoParticleDataLoader:
             self.train_df = self.train_df.sample(frac=0.01).reset_index(drop=True)
             print("Training dataset shrunk to ", self.train_df.shape)
         if not self.overfit:
-            self.val_df = pd.read_pickle(os.path.join(data_path, 'val.pkl'))
+            self.val_df = pd.read_pickle(os.path.join(data_path, 'valid.pkl'))
 
     def get_train_dataset(self):
         train_dataset = ParticleConfigDataset(self.train_df)

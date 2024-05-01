@@ -10,8 +10,35 @@ from aniso_per_particle.trainer.data_loader import AnisoParticleDataLoader
 from aniso_per_particle.model import ParticleEnergyPredictorHuang
 
 
+class MSELoss(nn.Module):
+    """Mean Squared Error Loss"""
+    def __init__(self):
+        super(MSELoss, self).__init__()
+
+    def forward(self, pred_force, target_force, pred_torque, target_torque):
+        return torch.mean((pred_force - target_force) ** 2) + torch.mean(
+            (pred_torque - target_torque) ** 2)
+class MAELoss(nn.Module):
+    """Mean Absolute Error Loss"""
+    def __init__(self):
+        super(MAELoss, self).__init__()
+
+    def forward(self, pred_force, target_force, pred_torque, target_torque):
+        return torch.mean(torch.abs(pred_force - target_force)) + torch.mean(
+            torch.abs(pred_torque - target_torque))
+
+class MSLLoss(nn.Module):
+    """Mean Squared Logarithmic Error Loss"""
+    def __init__(self):
+        super(MSLLoss, self).__init__()
+
+    def forward(self, pred_force, target_force, pred_torque, target_torque):
+        return torch.mean((torch.log(pred_force + 1) - torch.log(
+            target_force + 1)) ** 2) + torch.mean(
+            (torch.log(pred_torque + 1) - torch.log(target_torque + 1)) ** 2)
+
 class EnergyTrainer:
-    def __init__(self, config, job_id,):
+    def __init__(self, config, job_id, ):
         print("***************CUDA: ", torch.cuda.is_available())
         self.resume = config.resume
         self.job_id = job_id
@@ -64,9 +91,9 @@ class EnergyTrainer:
 
         # create data loaders
         self.aniso_data_loader = AnisoParticleDataLoader(config.data_path,
-                                                 config.batch_size,
-                                                 config.overfit,
-                                                 train_idx=self.train_idx)
+                                                         config.batch_size,
+                                                         config.overfit,
+                                                         train_idx=self.train_idx)
 
         self.train_dataloader = self.aniso_data_loader.get_train_dataset()
         if not self.overfit:
@@ -85,20 +112,11 @@ class EnergyTrainer:
 
         # create loss, optimizer and schedule
         if self.loss_type == "mae":
-            self.force_loss = nn.L1Loss().to(self.device)
-            self.torque_loss = nn.L1Loss().to(self.device)
-
-            self.criteria = nn.L1Loss().to(self.device)
+            self.loss = MAELoss().to(self.device)
         elif self.loss_type == "mse":
-            self.force_loss = nn.MSELoss().to(self.device)
-            self.torque_loss = nn.MSELoss().to(self.device)
-
-            self.criteria = nn.MSELoss().to(self.device)
-        elif self.loss_type == "huber":
-            self.force_loss = nn.HuberLoss(delta=5).to(self.device)
-            self.torque_loss = nn.HuberLoss(delta=5).to(self.device)
-
-            self.criteria = nn.HuberLoss(delta=5).to(self.device)
+            self.loss = MSELoss().to(self.device)
+        elif self.loss_type == "msl":
+            self.loss = MSLLoss().to(self.device)
 
         if self.optim == "Adam":
             self.optimizer = torch.optim.Adam(self.model.parameters(),
@@ -116,6 +134,13 @@ class EnergyTrainer:
 
         self.wandb_config = self._create_config()
         self._initiate_wandb_run()
+
+    def root_mean_squared_error(self, pred_force, target_force, pred_torque,
+                                target_torque):
+        ## ROOT MEAN SQUARED ERROR
+        return torch.sqrt(
+            torch.mean((pred_force - target_force) ** 2)) + torch.sqrt(
+            torch.mean((pred_torque - target_torque) ** 2))
 
     def set_scheduler(self):
         if self.scheduler_type == "ReduceLROnPlateau":
@@ -207,12 +232,12 @@ class EnergyTrainer:
         self.model.train()
         train_loss = 0.
         running_loss = 0.
-        force_running_loss = 0.
-        torque_running_loss = 0.
+        batch_counter = 0
         for i, (
                 (dr, orientation, n_orientation)
                 , target_force, target_torque, energy) in enumerate(
             self.train_dataloader):
+            batch_counter += 1
             self.optimizer.zero_grad()
             dr.requires_grad = True
             orientation.requires_grad = True
@@ -226,13 +251,11 @@ class EnergyTrainer:
             target_force = target_force.to(self.device)
             target_torque = target_torque.to(self.device)
 
-            force_loss = self.force_loss(predicted_force, target_force)
-            torque_loss = self.torque_loss(predicted_torque, target_torque)
-            _loss = force_loss + torque_loss
-            force_running_loss += force_loss.item()
-            torque_running_loss += torque_loss.item()
 
-            train_loss += _loss
+            _loss = self.loss(predicted_force, target_force, predicted_torque,
+                             target_torque)
+
+            train_loss += _loss.item()
             running_loss += _loss.item()
 
             _loss.backward()
@@ -241,31 +264,26 @@ class EnergyTrainer:
             self.optimizer.step()
 
             if i % 100 == 99:
-                if self.log:
-                    wandb.log({'running_loss': running_loss / 99.,
-                               'force_running_loss': force_running_loss / 99.,
-                               'torque_running_loss': torque_running_loss / 99.,
-                               })
-
+                # if self.log:
+                #     wandb.log({'running_loss': running_loss / 99.,
+                #                })
+                print('running_loss: ', running_loss / 99.)
                 running_loss = 0.0
 
-                force_running_loss = 0.0
-                torque_running_loss = 0.0
+        train_loss = train_loss / batch_counter
 
-        train_loss = train_loss / (i + 1)
-
-        return train_loss.item()
+        return train_loss
 
     def _validation(self, data_loader, print_output=False):
         self.model.eval()
         # with torch.no_grad():
         total_error = 0.
-        total_force_error = 0.
-        total_torque_error = 0.
+        batch_counter = 0
         for i, (
                 (dr, orientation, n_orientation)
-                , target_force, target_torque, energy)in enumerate(
+                , target_force, target_torque, energy) in enumerate(
             data_loader):
+            batch_counter += 1
             dr.requires_grad = True
             orientation.requires_grad = True
             dr = dr.to(self.device)
@@ -276,27 +294,24 @@ class EnergyTrainer:
                 dr, orientation, n_orientation)
 
             target_force = target_force.to(self.device)
-            force_error = self.criteria(predicted_force,
-                                        target_force).item()
 
             target_torque = target_torque.to(self.device)
-            torque_error = self.criteria(predicted_torque,
-                                         target_torque).item()
 
-            _error = (force_error + torque_error)
+            _error = self.root_mean_squared_error(predicted_force, target_force,
+                                                  predicted_torque,
+                                                  target_torque)
 
             total_error += _error
 
             if print_output and i % 100 == 0:
                 print('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$')
-                print("force prediction: ", predicted_force[5][:10])
-                print("force target: ", target_force[5][:10])
-                print("torque prediction: ", predicted_torque[5][:10])
-                print("torque target: ", target_torque[5][:10])
+                print("force prediction: ", predicted_force[5])
+                print("force target: ", target_force[5])
+                print("torque prediction: ", predicted_torque[5])
+                print("torque target: ", target_torque[5])
                 print('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$')
 
-        return total_error / (i + 1), total_force_error / (
-                i + 1), total_torque_error / (i + 1)
+        return total_error / batch_counter
 
     def run(self):
         if self.overfit:
@@ -306,9 +321,9 @@ class EnergyTrainer:
 
     def _run_overfit(self):
         if self.log:
-            wandb.watch(models=self.model, criterion=self.force_loss,
+            wandb.watch(models=self.model, criterion=self.loss,
                         log="gradients",
-                        log_freq=200)
+                        log_freq=10)
         print(
             '**************************Overfitting*******************************')
 
@@ -329,9 +344,9 @@ class EnergyTrainer:
     def _run_train_valid(self):
         if self.log:
             wandb.watch(models=self.model,
-                        criterion=self.force_loss + self.torque_loss,
+                        criterion=self.loss,
                         log="gradients",
-                        log_freq=20)
+                        log_freq=10)
 
         print(
             '**************************Training*******************************')
@@ -341,11 +356,8 @@ class EnergyTrainer:
 
             train_loss = self._train()
 
-            # val_error = self._validation(self.valid_dataloader)
-            # if self.use_scheduler:
-            #     self.scheduler.step(val_error)
             if epoch % 10 == 0:
-                val_error, val_force_error, val_torque_error = self._validation(
+                val_error = self._validation(
                     self.valid_dataloader, print_output=True)
                 if self.use_scheduler:
                     self.scheduler.step(val_error)
@@ -354,8 +366,6 @@ class EnergyTrainer:
                 if self.log:
                     wandb.log({'train_loss': train_loss,
                                'valid error': val_error,
-                               'valid force error': val_force_error,
-                               'valid torque error': val_torque_error,
                                "learning rate":
                                    self.optimizer.param_groups[0][
                                        'lr']})
