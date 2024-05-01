@@ -68,10 +68,12 @@ class ParticleEnergyPredictorHuang(nn.Module):
         B = dr.shape[0]
         Nb = dr.shape[1]
         epsilon = 1e-8
-        R_cut = 2.5
+        R_cut = 4.8
         eta = torch.tensor([[2.], [1.]]).to(self.device)
+        eta_size = eta.shape[0]
+        eta = eta.reshape(-1, 1, 1, 1, 1, 1, eta_size)
         zeta = torch.tensor([[2.], [4.], [8.], [16.], [32.], [64.]]).to(self.device)
-        R_s = torch.linspace(3, 9, 10).to(self.device)
+        R_s = torch.linspace(1, 4, 10).to(self.device)
         ##########################################
         # features: (B, N_neighbors, 15)
         dr = dr.reshape(B, Nb, 3, 1)
@@ -91,12 +93,14 @@ class ParticleEnergyPredictorHuang(nn.Module):
 
 
         ############# Sym fun ##############
-        fcR = (torch.cos(torch.pi * R/ R_cut) * 0.5 + 0.5).reshape(B, Nb, 1, 1, 1, 1, 1)
+        fcR = torch.where(R > R_cut, 0.0,
+                          (0.5 * torch.cos(torch.pi * R / R_cut) + 0.5)).reshape(B, Nb, 1, 1, 1, 1, 1)
+
 
         R_reduced = (R - R_s).reshape(B, Nb, 1, 1,R_s.shape[0] , 1, 1)
         pre_factor = torch.exp(-eta * (R_reduced ** 2))
 
-        pre_factor = pre_factor.reshape(B, Nb, 1, 1, R_s.shape[0], 1, eta.shape[0])
+        pre_factor = pre_factor.reshape(B, Nb, 1, 1, R_s.shape[0], 1, eta_size)
 
         ang = features.reshape(B, Nb, 15, 1, 1, 1)
         pos_factor_1 = (2**(1-zeta)*(1-ang)**zeta).reshape(B, Nb, self.in_dim, zeta.shape[0], 1, 1, 1)
@@ -106,7 +110,7 @@ class ParticleEnergyPredictorHuang(nn.Module):
         fca2 = pre_factor * fcR * pos_factor_2
         fca = torch.cat([fca1, fca2], dim=5)
         fcr = torch.sum(fca, dim=2)
-        GAR = fcr.reshape(B, Nb, R_s.shape[0] * 2 * zeta.shape[0] * 1 * eta.shape[0])
+        GAR = fcr.reshape(B, Nb, R_s.shape[0] * 2 * zeta.shape[0] * 1 * eta_size)
         DES = torch.sum(GAR, dim=1)
 
         ############# Energy Net ##############
@@ -150,7 +154,6 @@ if __name__ == '__main__':
                          'act_fn': 'Tanh'}
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = ParticleEnergyPredictorHuang(in_dim=15,
-                                         out_dim=1,
                                          prior_net_config=prior_net_config,
                                          energy_net_config=energy_net_config,
                                          dropout=0.,
