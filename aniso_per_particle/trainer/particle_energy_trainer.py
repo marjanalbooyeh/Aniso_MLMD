@@ -332,6 +332,8 @@ class EnergyTrainer:
             if epoch % 5 == 0:
                 print('####### epoch {}/{}: \n\t train_loss: {}'.
                       format(epoch + 1, self.epochs, train_loss))
+                if self.log:
+                    wandb.log({'train_loss': train_loss})
         if self.log:
             wandb.finish()
         checkpoint = {
