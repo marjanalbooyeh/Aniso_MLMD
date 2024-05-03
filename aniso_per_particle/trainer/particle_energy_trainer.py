@@ -12,14 +12,18 @@ from aniso_per_particle.model import ParticleEnergyPredictorHuang
 
 class MSELoss(nn.Module):
     """Mean Squared Error Loss"""
+
     def __init__(self):
         super(MSELoss, self).__init__()
 
     def forward(self, pred_force, target_force, pred_torque, target_torque):
         return torch.mean((pred_force - target_force) ** 2) + torch.mean(
             (pred_torque - target_torque) ** 2)
+
+
 class MAELoss(nn.Module):
     """Mean Absolute Error Loss"""
+
     def __init__(self):
         super(MAELoss, self).__init__()
 
@@ -27,8 +31,10 @@ class MAELoss(nn.Module):
         return torch.mean(torch.abs(pred_force - target_force)) + torch.mean(
             torch.abs(pred_torque - target_torque))
 
+
 class MSLLoss(nn.Module):
     """Mean Squared Logarithmic Error Loss"""
+
     def __init__(self):
         super(MSLLoss, self).__init__()
 
@@ -36,6 +42,7 @@ class MSLLoss(nn.Module):
         return torch.mean((torch.log(pred_force + 1) - torch.log(
             target_force + 1)) ** 2) + torch.mean(
             (torch.log(pred_torque + 1) - torch.log(target_torque + 1)) ** 2)
+
 
 class EnergyTrainer:
     def __init__(self, config, job_id, ):
@@ -251,9 +258,8 @@ class EnergyTrainer:
             target_force = target_force.to(self.device)
             target_torque = target_torque.to(self.device)
 
-
             _loss = self.loss(predicted_force, target_force, predicted_torque,
-                             target_torque)
+                              target_torque)
 
             train_loss += _loss.item()
             running_loss += _loss.item()

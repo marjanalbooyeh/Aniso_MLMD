@@ -76,7 +76,7 @@ class ParticleEnergyPredictorHuang(nn.Module):
         R_s = torch.linspace(1, 4, 10).to(self.device)
         ##########################################
         # features: (B, N_neighbors, 15)
-        dr = dr.reshape(B, Nb, 3, 1)
+        dr = dr.reshape(B, Nb, 3, 1) + epsilon
         R = torch.norm(dr, dim=2, keepdim=True)# (B, N_neighbors,1, 1)
         dr_norm = dr / R
         orientation = orientation.reshape(B, 1, 3, 3)
@@ -84,25 +84,29 @@ class ParticleEnergyPredictorHuang(nn.Module):
 
         ############# Prior Net ##############
         tanh = nn.Tanh()
-        prior_encoder = (((tanh(self.prior_net(features.squeeze(-1)))**2) + epsilon)
-                     .reshape(B, Nb, 1, 1, 1))
-        prior_out = R.reshape(B, Nb, 1, 1, 1) - prior_encoder
+        Ecin = (features.squeeze(-1) ** 2).reshape(B, Nb, 15)
+        encoder0 = tanh(self.prior_net(Ecin))
+        ECodeout = ((encoder0**2) + epsilon).reshape(B, Nb, 1, 1, 1)
+
+        prior_out = R.reshape(B, Nb, 1, 1, 1) - ECodeout
         prior_out = (self.prior_energy_factor_1 ** 2 + epsilon) * prior_out
         prior_out = prior_out ** (-1 *(self.prior_energy_factor_2 ** 2 + epsilon))
         prior_out = torch.sum(prior_out, dim=3)
 
 
         ############# Sym fun ##############
-        fcR = torch.where(R > R_cut, 0.0,
+        fcR = torch.where(R > R_cut,
+                          0.0,
                           (0.5 * torch.cos(torch.pi * R / R_cut) + 0.5)).reshape(B, Nb, 1, 1, 1, 1, 1)
 
 
         R_reduced = (R - R_s).reshape(B, Nb, 1, 1,R_s.shape[0] , 1, 1)
-        pre_factor = torch.exp(-eta * (R_reduced ** 2))
+
+        pre_factor = torch.exp(-eta * R_reduced ** 2)
 
         pre_factor = pre_factor.reshape(B, Nb, 1, 1, R_s.shape[0], 1, eta_size)
 
-        ang = features.reshape(B, Nb, 15, 1, 1, 1)
+        ang = (features.squeeze(-1) ** 2).reshape(B, Nb, self.in_dim, 1, 1, 1)
         pos_factor_1 = (2**(1-zeta)*(1-ang)**zeta).reshape(B, Nb, self.in_dim, zeta.shape[0], 1, 1, 1)
         pos_factor_2 = (2**(1-zeta)*(1+ang)**zeta).reshape(B, Nb, self.in_dim, zeta.shape[0], 1, 1, 1)
 
@@ -111,19 +115,20 @@ class ParticleEnergyPredictorHuang(nn.Module):
         fca = torch.cat([fca1, fca2], dim=5)
         fcr = torch.sum(fca, dim=2)
         GAR = fcr.reshape(B, Nb, R_s.shape[0] * 2 * zeta.shape[0] * 1 * eta_size)
-        DES = torch.sum(GAR, dim=1)
+        DES = torch.sum(GAR, dim=1).reshape(-1, R_s.shape[0] * 2 * zeta.shape[0] * 1 * eta_size)
 
         ############# Energy Net ##############
-        leaky_relu_1 = nn.LeakyReLU()
-        leaky_relu_2 = nn.LeakyReLU()
+        leaky_relu_1 = nn.LeakyReLU(negative_slope=1.0)
+        leaky_relu_2 = nn.LeakyReLU(negative_slope=1.0)
         sym_encode = leaky_relu_1(self.energy_net(DES))
-        predicted_energy = leaky_relu_2(sym_encode + torch.sum(prior_out.reshape(B, Nb, 1), dim=1))
+        predicted_energy = leaky_relu_2(sym_encode
+                                        + torch.sum(prior_out.reshape(B, Nb, 1), dim=1))
 
 
 
 
         ################## Calculate Force ##################
-        neighbors_force = - torch.autograd.grad(predicted_energy.sum(dim=1).sum(),
+        neighbors_force = torch.autograd.grad(predicted_energy.sum(dim=1).sum(),
                                                 dr,
                                                 create_graph=True)[0].to(
             self.device)  # (B, N, N_neighbors, 3)
@@ -132,7 +137,7 @@ class ParticleEnergyPredictorHuang(nn.Module):
 
 
         ################## Calculate Torque ##################
-        torque_grad = - torch.autograd.grad(predicted_energy.sum(dim=1).sum(),
+        torque_grad = torch.autograd.grad(predicted_energy.sum(dim=1).sum(),
                                             orientation,
                                             create_graph=True)[0].to(
             self.device) # (B, N, 3, 3)
