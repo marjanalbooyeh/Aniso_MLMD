@@ -43,9 +43,18 @@ class ParticleEnergyPredictorHuang(nn.Module):
                                         act_fn=self.energy_act_fn,
                                         dropout=self.dropout).to(self.device)
 
-        self.prior_energy_factor_1 =torch.nn.Parameter(torch.rand(3, 1), requires_grad=True)
-        self.prior_energy_factor_2 =torch.nn.Parameter(torch.rand(3, 1), requires_grad=True)
+        self.prior_energy_factor_1 = torch.nn.Parameter(torch.rand(3, 1), requires_grad=True)
+        self.prior_energy_factor_2 = torch.nn.Parameter(torch.rand(3, 1), requires_grad=True)
 
+        self.prior_net.apply(self.weights_init)
+        self.energy_net.apply(self.weights_init)
+        nn.init.uniform_(self.prior_energy_factor_1.weight)
+        nn.init.uniform_(self.prior_energy_factor_2.weight)
+
+    def weights_init(self, m):
+        if isinstance(m, nn.Linear):
+            nn.init.uniform_(m.weight.data)
+            nn.init.uniform_(m.bias.data)
     def _MLP_net(self, in_dim, h_dim, out_dim,
                  n_layers, act_fn, dropout):
         layers = [nn.Linear(in_dim, h_dim),
