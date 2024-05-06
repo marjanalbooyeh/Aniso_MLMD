@@ -268,14 +268,14 @@ class EnergyTrainer:
             if self.clipping:
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), 5)
             self.optimizer.step()
-
-            if i % 100 == 99:
+            del dr, orientation, n_orientation, target_force, target_torque, energy
+            if i % 500 == 499:
                 # if self.log:
                 #     wandb.log({'running_loss': running_loss / 99.,
                 #                })
-                print('running_loss: ', running_loss / 99.)
+                print('running_loss: ', running_loss / 499.)
                 running_loss = 0.0
-
+            torch.cuda.empty_cache()
         train_loss = train_loss / batch_counter
 
         return train_loss
@@ -303,19 +303,21 @@ class EnergyTrainer:
 
             target_torque = target_torque.to(self.device)
 
-            _error = self.root_mean_squared_error(predicted_force, target_force,
-                                                  predicted_torque,
+            _error = self.root_mean_squared_error(predicted_force.detach(), target_force,
+                                                  predicted_torque.detach(),
                                                   target_torque)
 
-            total_error += _error
+            total_error += _error.item()
 
-            if print_output and i % 100 == 0:
+            if print_output and i % 200 == 0:
                 print('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$')
                 print("force prediction: ", predicted_force[5])
                 print("force target: ", target_force[5])
                 print("torque prediction: ", predicted_torque[5])
                 print("torque target: ", target_torque[5])
                 print('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$')
+            del dr, orientation, n_orientation, target_force, target_torque, energy, predicted_force, predicted_torque
+            torch.cuda.empty_cache()
 
         return total_error / batch_counter
 
@@ -363,7 +365,6 @@ class EnergyTrainer:
         for epoch in range(self.epochs):
 
             train_loss = self._train()
-
             if epoch % 10 == 0:
                 val_error = self._validation(
                     self.valid_dataloader, print_output=True)

@@ -43,7 +43,7 @@ class ParticleConfigDataset(Dataset):
 
 def _get_data_loader(dataset, batch_size, shuffle=True):
     dataloader = DataLoader(dataset=dataset, batch_size=batch_size,
-                            shuffle=shuffle, num_workers=1)
+                            shuffle=shuffle, num_workers=0)
     return dataloader
 
 

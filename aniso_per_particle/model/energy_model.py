@@ -128,7 +128,7 @@ class ParticleEnergyPredictorHuang(nn.Module):
 
 
         ################## Calculate Force ##################
-        neighbors_force = torch.autograd.grad(predicted_energy.sum(dim=1).sum(),
+        neighbors_force = torch.autograd.grad(predicted_energy.sum(),
                                                 dr,
                                                 create_graph=True)[0].to(
             self.device)  # (B, N, N_neighbors, 3)
@@ -137,7 +137,7 @@ class ParticleEnergyPredictorHuang(nn.Module):
 
 
         ################## Calculate Torque ##################
-        torque_grad = torch.autograd.grad(predicted_energy.sum(dim=1).sum(),
+        torque_grad = torch.autograd.grad(predicted_energy.sum(),
                                             orientation,
                                             create_graph=True)[0].to(
             self.device) # (B, N, 3, 3)
