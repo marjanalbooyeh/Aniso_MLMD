@@ -48,8 +48,8 @@ class ParticleEnergyPredictorHuang(nn.Module):
 
         self.prior_net.apply(self.weights_init)
         self.energy_net.apply(self.weights_init)
-        nn.init.uniform_(self.prior_energy_factor_1.weight)
-        nn.init.uniform_(self.prior_energy_factor_2.weight)
+        nn.init.uniform_(self.prior_energy_factor_1)
+        nn.init.uniform_(self.prior_energy_factor_2)
 
     def weights_init(self, m):
         if isinstance(m, nn.Linear):
