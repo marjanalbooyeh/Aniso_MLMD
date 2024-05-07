@@ -281,7 +281,7 @@ class EnergyTrainer:
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), 5)
             self.optimizer.step()
             del dr, orientation, n_orientation, target_force, target_torque, energy
-            if i % 500 == 499:
+            if False and i % 500 == 499:
                 # if self.log:
                 #     wandb.log({'running_loss': running_loss / 99.,
                 #                })

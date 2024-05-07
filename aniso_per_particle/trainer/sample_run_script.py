@@ -9,7 +9,7 @@ parameters["resume"] = False
 
 # dataset parameters700
 parameters["data_path"] ="/home/marjan/Documents/fry/ml_dataset/pps_N800/"
-parameters["batch_size"] = 1
+parameters["batch_size"] = 256
 parameters["shrink"] = False
 parameters["overfit"] = True
 parameters["train_idx"] = 0
@@ -21,11 +21,11 @@ parameters["in_dim"] = 15
 parameters["out_dim"] = 3
 
 
-parameters["prior_hidden_dim"] =[64, 32, 5]
-parameters["prior_n_layers"] = 2
+parameters["prior_hidden_dim"] = [5, 3]
+parameters["prior_n_layers"] = 1
 parameters["prior_act_fn"] = "Tanh"
 
-parameters["energy_hidden_dim"] = [64, 128, 64, 32]
+parameters["energy_hidden_dim"] = [64, 256, 256,64]
 parameters["energy_n_layers"] = 3
 parameters["energy_act_fn"] = "Tanh"
 
@@ -36,7 +36,7 @@ parameters["model_type"] = "new"
 parameters["initial_weight"] =  None
 # optimizer parameters
 parameters["optim"] = "Adam"
-parameters["lr"] = 0.000015
+parameters["lr"] = 0.001
 parameters["min_lr"] = 0.0001
 parameters["use_scheduler"] = True
 parameters["scheduler_type"] = "ReduceLROnPlateau"

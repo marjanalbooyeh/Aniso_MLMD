@@ -187,7 +187,7 @@ class ParticleEnergyPredictor_New(nn.Module):
                                        act_fn=self.prior_act_fn,
                                        bn_dim=250).to(self.device)
         #
-        self.energy_net = self._MLP_net(in_dim=self.in_dim,
+        self.energy_net = self._MLP_net(in_dim=self.in_dim + 1,
                                         h_dim=self.energy_hidden_dim,
                                         out_dim=1,
                                         n_layers=self.energy_n_layers,
@@ -243,7 +243,7 @@ class ParticleEnergyPredictor_New(nn.Module):
 
         ############# Prior Net ##############
         tanh = nn.Tanh()
-        Ecin = (features.squeeze(-1) ** 2).reshape(B, Nb, 15)
+        Ecin = (features.squeeze(-1)**2).reshape(B, Nb, 15)
         encoder0 = tanh(self.prior_net(Ecin))
         ECodeout = ((encoder0**2) + epsilon).reshape(B, Nb, 1, 1, 1)
 
@@ -254,9 +254,9 @@ class ParticleEnergyPredictor_New(nn.Module):
 
         ############# Energy Net ##############
 
-        sym_encode = self.energy_net(Ecin)
+        sym_encode = self.energy_net(torch.cat([R.squeeze(-1), Ecin], dim=-1))
         predicted_energy = (torch.sum(sym_encode.reshape(B, Nb, 1)) +
-                            torch.sum(prior_out.reshape(B, Nb, 1),
+                            torch.sum(prior_out.reshape(B, Nb, 1) * 200,
                                       dim=1))
 
         ################## Calculate Force ##################
