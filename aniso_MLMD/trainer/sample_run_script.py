@@ -1,7 +1,10 @@
 from collections import OrderedDict
 parameters = OrderedDict()
-
+import torch
+print(torch.cuda.is_available())
+#
 # project parameters
+<<<<<<< Updated upstream
 parameters["project"] = "pps-energy-Apr22"
 parameters["group"] = "energy-V2"
 parameters["log"] = False
@@ -9,11 +12,22 @@ parameters["log"] = False
 # dataset parameters700
 parameters["data_path"] ="/home/marjan/Documents/fry/ml_dataset/pps_300_N15_balanced"
 parameters["batch_size"] = 10
+=======
+parameters["project"] = "pps-20-new"
+parameters["group"] = "rotation_matrix"
+parameters["notes"] = "Learning pps forces and torques"
+parameters["tags"] = "random sampling"
+
+# dataset parameters
+parameters["data_path"] = "/home/marjan/Documents/code-base/ml_datasets/pps_20_new"
+parameters["batch_size"] = 32
+>>>>>>> Stashed changes
 parameters["shrink"] = False
 parameters["overfit"] = True
 
 
 # model parameters
+<<<<<<< Updated upstream
 parameters["in_dim"] = 19
 parameters["out_dim"] = 128
 
@@ -31,6 +45,14 @@ parameters["energy_n_layers"] = 2
 parameters["energy_act_fn"] = "Tanh"
 
 
+=======
+# supported model types: "NN", "NNSkipShared", "NNGrow"
+parameters["in_dim"] = 80
+parameters["neighbor_hidden_dim"] = 20
+parameters["particle_hidden_dim"] = 20
+parameters["n_layer"] = 2
+parameters["act_fn"] = "Tanh"
+>>>>>>> Stashed changes
 parameters["dropout"] = 0.3
 parameters["batch_norm"] = False
 
@@ -48,7 +70,11 @@ parameters["loss_type"] = "mse"
 parameters["clipping"] = True
 
 # run parameters
+<<<<<<< Updated upstream
 parameters["epochs"] = 5000
+=======
+parameters["epochs"] = 50
+>>>>>>> Stashed changes
 
 class Struct:
     def __init__(self, **entries):

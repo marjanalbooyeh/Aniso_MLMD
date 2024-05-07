@@ -7,7 +7,7 @@ import torch.nn as nn
 import wandb
 
 from aniso_per_particle.trainer.data_loader import AnisoParticleDataLoader
-from aniso_per_particle.model import ParticleEnergyPredictorHuang
+from aniso_per_particle.model import ParticleEnergyPredictorHuang, ParticleEnergyPredictor_New
 
 
 class MSELoss(nn.Module):
@@ -76,6 +76,8 @@ class EnergyTrainer:
 
         self.dropout = config.dropout
         self.batch_norm = config.batch_norm
+        self.model_type = config.model_type
+        self.initial_weight = config.initial_weight
 
         # optimizer parameters
         self.optim = config.optim
@@ -162,13 +164,21 @@ class EnergyTrainer:
                                                              verbose=True)
 
     def _create_model(self):
-
-        model = ParticleEnergyPredictorHuang(in_dim=self.in_dim,
-                                             prior_net_config=self.prior_net_config,
-                                             energy_net_config=self.energy_net_config,
-                                             dropout=self.dropout,
-                                             batch_norm=self.batch_norm,
-                                             device=self.device)
+        if self.model_type == "huang":
+            model = ParticleEnergyPredictorHuang(in_dim=self.in_dim,
+                                                 prior_net_config=self.prior_net_config,
+                                                 energy_net_config=self.energy_net_config,
+                                                 dropout=self.dropout,
+                                                 batch_norm=self.batch_norm,
+                                                 device=self.device)
+        else:
+            model = ParticleEnergyPredictor_New(in_dim=self.in_dim,
+                                                 prior_net_config=self.prior_net_config,
+                                                 energy_net_config=self.energy_net_config,
+                                                 dropout=self.dropout,
+                                                 batch_norm=self.batch_norm,
+                                                 device=self.device,
+                                                initial_weights=self.initial_weight)
         model.to(self.device)
         return model
 
@@ -192,6 +202,8 @@ class EnergyTrainer:
             "energy_net_config": self.energy_net_config,
             "dropout": self.dropout,
             "batch_norm": self.batch_norm,
+            "model_type": self.model_type,
+            "initial_weight": self.initial_weight,
             "optim": self.optim,
             "decay": self.decay,
             "use_scheduler": self.use_scheduler,
