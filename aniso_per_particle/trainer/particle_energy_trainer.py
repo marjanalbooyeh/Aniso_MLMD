@@ -7,7 +7,7 @@ import torch.nn as nn
 import wandb
 
 from aniso_per_particle.trainer.data_loader import AnisoParticleDataLoader
-from aniso_per_particle.model import ParticleEnergyPredictorHuang, ParticleEnergyPredictor_New
+from aniso_per_particle.model import ParticleEnergyPredictorHuang, ParticleEnergyPredictor_New, ParticleEnergyPredictor_V2
 
 
 class MSELoss(nn.Module):
@@ -65,7 +65,9 @@ class EnergyTrainer:
         self.prior_net_config = {
             "hidden_dim": config.prior_hidden_dim,
             "n_layers": config.prior_n_layers,
-            "act_fn": config.prior_act_fn
+            "act_fn": config.prior_act_fn,
+            "pre_factor": config.prior_pre_factor,
+            "n": config.prior_n
         }
 
         self.energy_net_config = {
@@ -171,13 +173,21 @@ class EnergyTrainer:
                                                  dropout=self.dropout,
                                                  batch_norm=self.batch_norm,
                                                  device=self.device)
-        else:
-            model = ParticleEnergyPredictor_New(in_dim=self.in_dim,
+        elif self.model_type == "v2":
+            model = ParticleEnergyPredictor_V2(in_dim=self.in_dim,
                                                  prior_net_config=self.prior_net_config,
                                                  energy_net_config=self.energy_net_config,
                                                  dropout=self.dropout,
                                                  batch_norm=self.batch_norm,
                                                  device=self.device,
+                                                initial_weights=self.initial_weight)
+        else:
+            model = ParticleEnergyPredictor_New(in_dim=self.in_dim,
+                                                prior_net_config=self.prior_net_config,
+                                                energy_net_config=self.energy_net_config,
+                                                dropout=self.dropout,
+                                                batch_norm=self.batch_norm,
+                                                device=self.device,
                                                 initial_weights=self.initial_weight)
         model.to(self.device)
         return model
