@@ -281,6 +281,17 @@ class ParticleEnergyPredictor_New(nn.Module):
 
         return predicted_force, predicted_torque, predicted_energy
 
+
+class PhysicsInformedRepulsiveLayer(nn.Module):
+    def __init__(self, encoded_dim):
+        super(PhysicsInformedRepulsiveLayer, self).__init__()
+        self.alpha = nn.Parameter(torch.tensor(1.0))  # Example trainable parameter
+        self.beta = nn.Parameter(torch.tensor(1.0))   # Example trainable parameter
+
+    def forward(self, encoded_features, r):
+        # Apply a physics-informed repulsive potential equation
+        repulsive_energy = self.alpha * torch.exp(-self.beta * r) * torch.norm(encoded_features, dim=-1)
+        return repulsive_energy
 class ParticleEnergyPredictor_V2(nn.Module):
     def __init__(self, in_dim,
                  prior_net_config,
@@ -316,7 +327,7 @@ class ParticleEnergyPredictor_V2(nn.Module):
                                        bn_dim=250).to(self.device)
 
 
-        self.energy_net = self._MLP_net(in_dim=self.in_dim,
+        self.energy_net = self._MLP_net(in_dim=self.in_dim+1 ,
                                         h_dim=self.energy_hidden_dim,
                                         out_dim=1,
                                         n_layers=self.energy_n_layers,
@@ -349,7 +360,7 @@ class ParticleEnergyPredictor_V2(nn.Module):
             if self.batch_norm:
                 layers.append(nn.BatchNorm1d(bn_dim))
             layers.append(get_act_fn(act_fn))
-            # layers.append(nn.Dropout(p=dropout))
+            layers.append(nn.Dropout(p=self.dropout))
         layers.append(
             nn.Linear(h_dim[-1], out_dim))
         return nn.Sequential(*layers)
@@ -373,16 +384,21 @@ class ParticleEnergyPredictor_V2(nn.Module):
 
         ############# Prior Net ##############
         tanh = nn.Tanh()
-        prior_features = (features.squeeze(-1)**2).reshape(B, Nb, 15)
+        prior_features = (features.squeeze(-1)).reshape(B, Nb, 15)
         prior_enc = tanh(self.prior_net(prior_features))
         # physics informed repulsive potential
         prior_out = self.prior_pre_factor * torch.exp(-(R.reshape(B, Nb, 1)/R_cut)**self.prior_n) * prior_enc
 
 
         ############# Energy Net ##############
-
-        sym_encode = self.energy_net(features.squeeze(-1))
-        predicted_energy = (torch.sum(sym_encode.reshape(B, Nb, 1)) +
+        fcR = torch.where(R > R_cut,
+                          0.0,
+                          (0.5 * torch.cos(torch.pi * R / R_cut) + 0.5)).reshape(B, Nb, 1)
+        tanh_2 = nn.Tanh()
+        energy_feat = torch.cat([1/R.squeeze(-1), features.squeeze(-1)], dim=-1).reshape(B, Nb, 16)
+        sym_encode = tanh_2(self.energy_net(energy_feat))
+        energy_net_out = sym_encode * fcR
+        predicted_energy = (torch.sum(energy_net_out.reshape(B, Nb, 1), dim=1) +
                             torch.sum(prior_out.reshape(B, Nb, 1),
                                       dim=1))
 

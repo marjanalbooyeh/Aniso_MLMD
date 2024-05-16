@@ -8,10 +8,10 @@ parameters["log"] = False
 parameters["resume"] = False
 
 # dataset parameters700
-parameters["data_path"] ="/home/marjan/Documents/fry/ml_dataset/pps_N800/"
-parameters["batch_size"] = 256
+parameters["data_path"] ="/Users/marjan/Documents/code-base/cmelab/Aniso_Project/ml_datasets/pps_800"
+parameters["batch_size"] = 64
 parameters["shrink"] = False
-parameters["overfit"] = True
+parameters["overfit"] = False
 parameters["train_idx"] = 0
 
 
@@ -21,18 +21,20 @@ parameters["in_dim"] = 15
 parameters["out_dim"] = 3
 
 
-parameters["prior_hidden_dim"] = [5, 3]
-parameters["prior_n_layers"] = 1
+parameters["prior_hidden_dim"] = [5, 32, 64, 64, 32, 5, 3]
+parameters["prior_n_layers"] = 6
 parameters["prior_act_fn"] = "Tanh"
+parameters["prior_pre_factor"] = 0.1
+parameters["prior_n"] = 1
 
-parameters["energy_hidden_dim"] = [64, 256, 256,64]
-parameters["energy_n_layers"] = 3
+parameters["energy_hidden_dim"] = [5, 32, 32, 32, 3]
+parameters["energy_n_layers"] = 4
 parameters["energy_act_fn"] = "Tanh"
 
 
-parameters["dropout"] = 0.3
+parameters["dropout"] = 0.5
 parameters["batch_norm"] = False
-parameters["model_type"] = "new"
+parameters["model_type"] = "v2"
 parameters["initial_weight"] =  None
 # optimizer parameters
 parameters["optim"] = "Adam"
