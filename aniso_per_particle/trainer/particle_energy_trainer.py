@@ -333,10 +333,10 @@ class EnergyTrainer:
 
             if print_output and i % 200 == 0:
                 print('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$')
-                print("force prediction: ", predicted_force[5])
-                print("force target: ", target_force[5])
-                print("torque prediction: ", predicted_torque[5])
-                print("torque target: ", target_torque[5])
+                print("force prediction: ", predicted_force[0])
+                print("force target: ", target_force[0])
+                print("torque prediction: ", predicted_torque[0])
+                print("torque target: ", target_torque[0])
                 print('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$')
             del dr, orientation, n_orientation, target_force, target_torque, energy, predicted_force, predicted_torque
             torch.cuda.empty_cache()

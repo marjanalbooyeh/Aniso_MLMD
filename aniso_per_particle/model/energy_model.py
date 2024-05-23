@@ -56,17 +56,18 @@ class ParticleEnergyPredictorHuang(nn.Module):
             nn.init.uniform_(m.bias.data)
     def _MLP_net(self, in_dim, h_dim, out_dim,
                  n_layers, act_fn, bn_dim):
-        layers = [nn.Linear(in_dim, h_dim),
+
+        layers = [nn.Linear(in_dim, h_dim[0]),
                   get_act_fn(act_fn)]
         for i in range(n_layers):
             layers.append(
-                nn.Linear(h_dim, h_dim))
+                nn.Linear(h_dim[i], h_dim[i+1]))
             if self.batch_norm:
                 layers.append(nn.BatchNorm1d(bn_dim))
             layers.append(get_act_fn(act_fn))
-            # layers.append(nn.Dropout(p=dropout))
+            layers.append(nn.Dropout(p=self.dropout))
         layers.append(
-            nn.Linear(h_dim, out_dim))
+            nn.Linear(h_dim[-1], out_dim))
         return nn.Sequential(*layers)
 
     def forward(self, dr, orientation, n_orientation):
@@ -81,7 +82,7 @@ class ParticleEnergyPredictorHuang(nn.Module):
         eta_size = eta.shape[0]
         eta = eta.reshape(-1, 1, 1, 1, 1, 1, eta_size)
         zeta = torch.tensor([[2.], [4.0], [8.0], [16.0], [32.], [64.]]).to(self.device)
-        R_s = torch.linspace(1, 4, 10).to(self.device)
+        R_s = torch.linspace(1, 4.8, 10).to(self.device)
         ##########################################
         # features: (B, N_neighbors, 15)
         dr = dr.reshape(B, Nb, 3, 1) + epsilon
@@ -220,7 +221,7 @@ class ParticleEnergyPredictor_New(nn.Module):
             if self.batch_norm:
                 layers.append(nn.BatchNorm1d(bn_dim))
             layers.append(get_act_fn(act_fn))
-            # layers.append(nn.Dropout(p=dropout))
+            layers.append(nn.Dropout(p=self.dropout))
         layers.append(
             nn.Linear(h_dim[-1], out_dim))
         return nn.Sequential(*layers)
@@ -256,7 +257,7 @@ class ParticleEnergyPredictor_New(nn.Module):
 
         sym_encode = self.energy_net(torch.cat([R.squeeze(-1), Ecin], dim=-1))
         predicted_energy = (torch.sum(sym_encode.reshape(B, Nb, 1)) +
-                            torch.sum(prior_out.reshape(B, Nb, 1) * 200,
+                            torch.sum(prior_out.reshape(B, Nb, 1) ,
                                       dim=1))
 
         ################## Calculate Force ##################

@@ -49,18 +49,19 @@ def _get_data_loader(dataset, batch_size, shuffle=True):
 
 
 class AnisoParticleDataLoader:
-    def __init__(self, data_path, batch_size, overfit=False, train_idx=0):
+    def __init__(self, data_path, batch_size, overfit=False, shrink=False, train_idx=0):
         self.data_path = data_path
         self.batch_size = batch_size
         self.overfit = overfit
+        self.shrink = shrink
         self.train_idx = train_idx
 
         self.train_df = pd.read_pickle(os.path.join(data_path, f'train_{train_idx}.pkl'))
-        if True or self.overfit:
+        if self.overfit or self.shrink:
             self.train_df = self.train_df.sample(frac=0.5).reset_index(drop=True)
             print("Training dataset shrunk to ", self.train_df.shape)
-        if True or not self.overfit:
-            self.val_df = pd.read_pickle(os.path.join(data_path, 'valid.pkl'))
+        self.val_df = pd.read_pickle(os.path.join(data_path, 'valid.pkl'))
+        if self.shrink:
             self.val_df = self.val_df.sample(frac=0.02).reset_index(drop=True)
             print("Validation dataset shrunk to ", self.val_df.shape)
 

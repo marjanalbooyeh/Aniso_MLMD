@@ -26,7 +26,6 @@ parameters["prior_n_layers"] = 6
 parameters["prior_act_fn"] = "Tanh"
 parameters["prior_pre_factor"] = 0.1
 parameters["prior_n"] = 1
-
 parameters["energy_hidden_dim"] = [5, 32, 32, 32, 3]
 parameters["energy_n_layers"] = 4
 parameters["energy_act_fn"] = "Tanh"
@@ -38,7 +37,7 @@ parameters["model_type"] = "v2"
 parameters["initial_weight"] =  None
 # optimizer parameters
 parameters["optim"] = "Adam"
-parameters["lr"] = 0.001
+parameters["lr"] = 0.00015
 parameters["min_lr"] = 0.0001
 parameters["use_scheduler"] = True
 parameters["scheduler_type"] = "ReduceLROnPlateau"
