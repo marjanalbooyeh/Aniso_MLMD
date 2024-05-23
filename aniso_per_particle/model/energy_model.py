@@ -424,6 +424,108 @@ class ParticleEnergyPredictor_V2(nn.Module):
         predicted_torque = (tq_x + tq_y + tq_z).to(self.device)
 
         return predicted_force, predicted_torque, predicted_energy
+
+class ParticleTorForPredictor_V1(nn.Module):
+    def __init__(self, in_dim,
+                 force_net_config,
+                 torque_net_config,
+                 dropout=0.3,
+                 batch_norm=False,
+                 device=None,
+                 initial_weights=None,
+                 ):
+        super(ParticleTorForPredictor_V1, self).__init__()
+
+        self.force_hidden_dim = force_net_config['hidden_dim']
+        self.force_n_layers = force_net_config['n_layers']
+        self.force_act_fn = force_net_config['act_fn']
+        self.force_pre_factor = force_net_config['pre_factor']
+
+        self.torque_hidden_dim = torque_net_config['hidden_dim']
+        self.torque_n_layers = torque_net_config['n_layers']
+        self.torque_act_fn = torque_net_config['act_fn']
+        self.torque_pre_factor = torque_net_config['pre_factor']
+
+        self.dropout = dropout
+        self.device = device
+        self.in_dim = in_dim
+        self.batch_norm = batch_norm
+
+        self.force_net = self._MLP_net(in_dim=self.in_dim,
+                                       h_dim=self.force_hidden_dim,
+                                       out_dim=3,
+                                       n_layers=self.force_n_layers,
+                                       act_fn=self.force_act_fn,
+                                       bn_dim=250).to(self.device)
+
+        self.torque_net = self._MLP_net(in_dim=self.in_dim,
+                                        h_dim=self.torque_hidden_dim,
+                                        out_dim=3,
+                                        n_layers=self.torque_n_layers,
+                                        act_fn=self.torque_act_fn,
+                                        bn_dim=self.torque_hidden_dim).to(self.device)
+        if initial_weights:
+            self.force_net.apply(self.weights_init)
+            self.torque_net.apply(self.weights_init)
+
+    def weights_init(self, m):
+        if isinstance(m, nn.Linear):
+            nn.init.uniform_(m.weight.data)
+            nn.init.uniform_(m.bias.data)
+
+    def _MLP_net(self, in_dim, h_dim, out_dim,
+                 n_layers, act_fn, bn_dim):
+
+        layers = [nn.Linear(in_dim, h_dim[0]),
+                  get_act_fn(act_fn)]
+        for i in range(n_layers):
+            layers.append(
+                nn.Linear(h_dim[i], h_dim[i+1]))
+            if self.batch_norm:
+                layers.append(nn.BatchNorm1d(bn_dim))
+            layers.append(get_act_fn(act_fn))
+            layers.append(nn.Dropout(p=self.dropout))
+        layers.append(
+            nn.Linear(h_dim[-1], out_dim))
+        return nn.Sequential(*layers)
+
+
+    def forward(self, dr, orientation, n_orientation):
+        # dr: (B, Nb, 3) # distance vector between particle and its neighbors
+        # orientation: (B, 3, 3) # particle's orientation
+        # n_orientation: (B, Nb,  3, 3) # neighbors' orientation
+        B = dr.shape[0]
+        Nb = dr.shape[1]
+        epsilon = 1e-8
+        R_cut = 4.8
+        ##########################################
+        # features: (B, N_neighbors, 15)
+        dr = dr.reshape(B, Nb, 3, 1) + epsilon
+        R = torch.norm(dr, dim=2, keepdim=True)# (B, N_neighbors,1, 1)
+        dr_norm = dr / R
+        orientation = orientation.reshape(B, 1, 3, 3)
+        features = feature_vector(dr_norm, orientation, n_orientation).to(self.device) # (B, N_neighbors, 15, 1)
+        all_features = (torch.cat([R.squeeze(-1), 1 / R.squeeze(-1),
+                                  features.squeeze(-1)], dim=-1).
+                        reshape(B, Nb, 17))
+        fcR = (torch.where(R > R_cut,
+                          0.0,
+                          (0.5 * torch.cos(torch.pi * R / R_cut) + 0.5)).
+               reshape(B, Nb, 1))
+        ############# Force Net ##############
+        force_enc = self.force_net(all_features) # (B, Nb, 3)
+        force_out = self.force_pre_factor * force_enc * fcR
+
+        ############# Torque Net ##############
+        torque_enc = self.torque_net(all_features) # (B, Nb, 3)
+        torque_out = self.torque_pre_factor * torque_enc * fcR
+
+        predicted_force = torch.sum(force_out, dim=1).reshape(B, 3)
+        predicted_torque = torch.sum(torque_out, dim=1).reshape(B, 3)
+        predicted_energy = torch.zeros(B, 1).to(self.device)
+
+        return predicted_force, predicted_torque, predicted_energy
+
 if __name__ == '__main__':
     prior_net_config = {'hidden_dim': [64, 32, 5],
                         'n_layers': 2,
