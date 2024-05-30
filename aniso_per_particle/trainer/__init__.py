@@ -1,2 +1,3 @@
 from .data_loader import AnisoParticleDataLoader
 from .particle_energy_trainer import EnergyTrainer
+from .particle_fortor_trainer import ForTorTrainer
