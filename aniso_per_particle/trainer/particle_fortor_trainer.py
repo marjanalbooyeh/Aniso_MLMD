@@ -58,6 +58,7 @@ class ForTorTrainer:
         self.batch_size = config.batch_size
         self.overfit = config.overfit
         self.shrink = config.shrink
+        self.shrink_factor = config.shrink_factor
         self.train_idx = config.train_idx
 
         # model parameters
@@ -108,6 +109,7 @@ class ForTorTrainer:
                                                          batch_size=config.batch_size,
                                                          overfit=config.overfit,
                                                          shrink=config.shrink,
+                                                         shrink_factor=config.shrink_factor,
                                                          train_idx=self.train_idx)
 
         self.train_dataloader = self.aniso_data_loader.get_train_dataset()
@@ -267,20 +269,22 @@ class ForTorTrainer:
             predicted_force, predicted_torque = self.model(
                 dr, orientation, n_orientation)
 
-            target_force = target_force.to(self.device)
-            target_torque = target_torque.to(self.device)
+            scaled_target_force = ((target_force - self.aniso_data_loader.force_mean) / self.aniso_data_loader.force_std).to(self.device)
+            scaled_target_torque = ((target_torque - self.aniso_data_loader.torque_mean) / self.aniso_data_loader.torque_std).to(self.device)
+            # target_force = target_force.to(self.device)
+            # target_torque = target_torque.to(self.device)
 
-            _loss = self.loss(predicted_force, target_force, predicted_torque,
-                              target_torque)
+            _loss = self.loss(predicted_force, scaled_target_force, predicted_torque,
+                              scaled_target_torque)
 
             train_loss += _loss.item()
             running_loss += _loss.item()
 
             _loss.backward()
             if self.clipping:
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), 5)
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1)
             self.optimizer.step()
-            del dr, orientation, n_orientation, target_force, target_torque, energy
+            del dr, orientation, n_orientation, scaled_target_torque, scaled_target_force, energy
             if False and i % 500 == 499:
                 # if self.log:
                 #     wandb.log({'running_loss': running_loss / 99.,
@@ -310,23 +314,25 @@ class ForTorTrainer:
 
             predicted_force, predicted_torque = self.model(
                 dr, orientation, n_orientation)
+            predicted_force_rescale = predicted_force * self.aniso_data_loader.force_std.to(self.device) + self.aniso_data_loader.force_mean.to(self.device)
+            predicted_torque_rescale = predicted_torque * self.aniso_data_loader.torque_std.to(self.device) + self.aniso_data_loader.torque_mean.to(self.device)
 
             target_force = target_force.to(self.device)
 
             target_torque = target_torque.to(self.device)
 
-            _error = self.root_mean_squared_error(predicted_force.detach(),
+            _error = self.root_mean_squared_error(predicted_force_rescale.detach(),
                                                   target_force,
-                                                  predicted_torque.detach(),
+                                                  predicted_torque_rescale.detach(),
                                                   target_torque)
 
             total_error += _error.item()
 
             if print_output and i % 200 == 0:
                 print('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$')
-                print("force prediction: ", predicted_force[0])
+                print("force prediction: ", predicted_force_rescale[0])
                 print("force target: ", target_force[0])
-                print("torque prediction: ", predicted_torque[0])
+                print("torque prediction: ", predicted_torque_rescale[0])
                 print("torque target: ", target_torque[0])
                 print('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$')
             del dr, orientation, n_orientation, target_force, target_torque, energy, predicted_force, predicted_torque

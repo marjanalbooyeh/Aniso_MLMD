@@ -5,7 +5,9 @@ import pandas as pd
 import torch
 from torch.utils.data import Dataset, DataLoader
 import torch.multiprocessing
+
 torch.multiprocessing.set_sharing_strategy('file_system')
+
 
 class ParticleConfigDataset(Dataset):
     def __init__(self, traj_df):
@@ -47,23 +49,35 @@ def _get_data_loader(dataset, batch_size, shuffle=True):
     return dataloader
 
 
-
 class AnisoParticleDataLoader:
-    def __init__(self, data_path, batch_size, overfit=False, shrink=False, train_idx=0):
+    def __init__(self, data_path, batch_size, overfit=False, shrink=False,
+                 shrink_factor=0.1,
+                 train_idx=0):
         self.data_path = data_path
         self.batch_size = batch_size
         self.overfit = overfit
         self.shrink = shrink
+        self.shrink_factor = shrink_factor
         self.train_idx = train_idx
 
-        self.train_df = pd.read_pickle(os.path.join(data_path, f'train_{train_idx}.pkl'))
+        self.train_df = pd.read_pickle(
+            os.path.join(data_path, f'train_{train_idx}.pkl'))
         if self.overfit or self.shrink:
-            self.train_df = self.train_df.sample(frac=0.5).reset_index(drop=True)
+            self.train_df = self.train_df.sample(frac=self.shrink_factor).reset_index(
+                drop=True)
             print("Training dataset shrunk to ", self.train_df.shape)
         self.val_df = pd.read_pickle(os.path.join(data_path, 'valid.pkl'))
         if self.shrink:
-            self.val_df = self.val_df.sample(frac=0.02).reset_index(drop=True)
+            self.val_df = self.val_df.sample(frac=self.shrink_factor*0.1).reset_index(drop=True)
             print("Validation dataset shrunk to ", self.val_df.shape)
+        self.force_mean = torch.from_numpy(
+            np.mean(np.asarray(list(self.train_df['force'])), axis=0))
+        self.force_std = torch.from_numpy(
+            np.std(np.asarray(list(self.train_df['force'])), axis=0))
+        self.torque_mean = torch.from_numpy(
+            np.mean(np.asarray(list(self.train_df['torque'])), axis=0))
+        self.torque_std = torch.from_numpy(
+            np.std(np.asarray(list(self.train_df['torque'])), axis=0))
 
     def get_train_dataset(self):
         train_dataset = ParticleConfigDataset(self.train_df)
@@ -78,5 +92,3 @@ class AnisoParticleDataLoader:
                                             batch_size=self.batch_size,
                                             shuffle=True)
         return valid_dataloader
-
-

@@ -20,34 +20,41 @@ def get_parameters():
     parameters = OrderedDict()
 
     # project parameters
-    parameters["project"] = ["huang-Apr29"]
-    parameters["group"] = ["energy-0"]
+    parameters["project"] = ["ForTor-no-repulsion-May31"]
+    parameters["group"] = ["fortor-0"]
     parameters["log"] = [False]
     parameters["resume"] = [False]
 
     # dataset parameters700
     parameters["data_path"] =["/home/marjanalbooyeh/Aniso_ML_MD_project/ml_datasets/pps_300_N15_Apr25/"]
-    parameters["batch_size"] = [16]
-    parameters["shrink"] = [False]
-    parameters["overfit"] = [True]
-    parameters["train_idx"] = [0]
-
+    parameters["batch_size"] = [8]
+    parameters["shrink"] = [True]
+    parameters["shrink_factor"] = [0.1]
+    parameters["overfit"] = False
+    parameters["train_idx"] = 0
 
     # model parameters
-    parameters["in_dim"] = [15]
+    parameters["in_dim"] = [18]
     parameters["out_dim"] = [3]
 
-    parameters["prior_hidden_dim"] = [3]
-    parameters["prior_n_layers"] = [2]
-    parameters["prior_act_fn"] = ["Tanh"]
+    parameters["force_hidden_dim"] = [[32, 5, 5]]
+    parameters["force_n_layers"] = [2]
+    parameters["force_act_fn"] = ["LeakyReLU"]
+    parameters["force_pre_factor"] = 1.0
 
-    parameters["energy_hidden_dim"] = [5]
-    parameters["energy_n_layers"] = [3]
-    parameters["energy_act_fn"] = ["Tanh"]
+    parameters["torque_hidden_dim"] = [[32, 128, 5]]
+    parameters["torque_n_layers"] = [2]
+    parameters["torque_act_fn"] = ["LeakyReLU"]
+    parameters["torque_pre_factor"] = 1.0
 
+    parameters["lpar"] = [2.176]
+    parameters["lperp"] = [1.54]
+    parameters["sigma"] = [-1.13]
+    parameters["n_factor"] = [12]
 
-    parameters["dropout"] = [0.]
+    parameters["dropout"] = [0.5]
     parameters["batch_norm"] = [False]
+    parameters["initial_weight"] = [None]
 
     # optimizer parameters
     parameters["optim"] = ["Adam"]
@@ -63,7 +70,7 @@ def get_parameters():
     parameters["clipping"] = [False]
 
     # run parameters
-    parameters["epochs"] = [1000]
+    parameters["epochs"] = [10000]
 
     return list(parameters.keys()), list(product(*parameters.values()))
 
@@ -72,7 +79,7 @@ custom_job_doc = {}  # add keys and values for each job document created
 
 
 def main(root=None):
-    project = signac.init_project("Huang", root=root)  # Set the signac project name
+    project = signac.init_project("ForTor", root=root)  # Set the signac project name
     param_names, param_combinations = get_parameters()
     # Create jobs
     for params in param_combinations:

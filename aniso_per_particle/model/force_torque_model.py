@@ -60,7 +60,7 @@ def cosine_features(dr, particle_orientation, neighbors_orientations):
 #         return replusion_factor
 
 
-def repulsion_calculator_v1(dr, dr_orient_dot, dr_n_orient_dot,
+def repulsion_calculator_v1(R, dr, dr_orient_dot, dr_n_orient_dot,
                             orient_n_orient_dot, n_factor, psi, sigma_factor):
     # Apply a physics-informed repulsive potential equation
     main_axis_orient_n_orient = torch.diagonal(orient_n_orient_dot, dim1=-1,
@@ -75,8 +75,9 @@ def repulsion_calculator_v1(dr, dr_orient_dot, dr_n_orient_dot,
     dr_orient_enc = torch.pow(1 - 0.5 * psi * (dr_orient_enc1 + dr_orient_enc2),
                               -0.5) * sigma_factor  # (B, N_neighbors, 3)
 
-    repulsion = torch.pow(dr - dr_orient_enc,
-                          n_factor) / dr  # (B, N_neighbors, 3)
+    rho = (R - dr_orient_enc + 3.6) / 3.6
+    eps = torch.pow(1 - ((psi**2) * (main_axis_orient_n_orient**2)), 0.5)
+    repulsion = 48 * (eps/R) * torch.pow(rho, -n_factor)
     return repulsion
 
 
@@ -108,6 +109,7 @@ class ParticleTorForPredictor_V1(nn.Module):
                  batch_norm=False,
                  device=None,
                  initial_weights=None,
+                 repulsion=False
                  ):
         super(ParticleTorForPredictor_V1, self).__init__()
 
@@ -133,6 +135,7 @@ class ParticleTorForPredictor_V1(nn.Module):
         self.device = device
         self.in_dim = in_dim
         self.batch_norm = batch_norm
+        self.repulsion = repulsion
 
         self.force_net = self._MLP_net(in_dim=self.in_dim,
                                        h_dim=self.force_hidden_dim,
@@ -147,13 +150,14 @@ class ParticleTorForPredictor_V1(nn.Module):
                                         act_fn=self.torque_act_fn,).to(
             self.device)
 
-        self.force_repulsion_net = self._MLP_net(in_dim=3,
+        if self.repulsion:
+            self.force_repulsion_net = self._MLP_net(in_dim=3,
                                                  h_dim=[32, 32],
                                                  out_dim=3,
                                                  n_layers=1,
                                                  act_fn=self.torque_act_fn,
                                                  ).to(self.device)
-        self.torque_repulsion_net = self._MLP_net(in_dim=3,
+            self.torque_repulsion_net = self._MLP_net(in_dim=3,
                                                     h_dim=[32, 32],
                                                     out_dim=3,
                                                     n_layers=1,
@@ -166,8 +170,8 @@ class ParticleTorForPredictor_V1(nn.Module):
 
     def weights_init(self, m):
         if isinstance(m, nn.Linear):
-            nn.init.uniform_(m.weight.data)
-            nn.init.uniform_(m.bias.data)
+            nn.init.xavier_uniform_(m.weight.data)
+            nn.init.xavier_uniform_(m.bias.data)
 
     def _MLP_net(self, in_dim, h_dim, out_dim,
                  n_layers, act_fn):
@@ -215,30 +219,32 @@ class ParticleTorForPredictor_V1(nn.Module):
             [dr_norm, dr_orient_dot, dr_n_orient_dot,
              orient_n_orient_dot.reshape(B, Nb, 9)],
             dim=-1)  # (B, N_neighbors, 18)
-        all_features = (torch.cat([R, 1 / R,
-                                   features], dim=-1).to(
-            self.device))  # (B, N_neighbors, 20)
+        # all_features = (torch.cat([R, 1 / R,
+        #                            features], dim=-1).to(
+        #     self.device))  # (B, N_neighbors, 20)
         fcR = (torch.where(R > R_cut,
                            0.0,
                            (0.5 * torch.cos(torch.pi * R / R_cut) + 0.5)).
                reshape(B, Nb, 1))
         ############# Repulsion Net ##############
-        repulsion_factor = repulsion_calculator_v1(dr_norm, dr_orient_dot,
-                                                   dr_n_orient_dot,
-                                                   orient_n_orient_dot,
-                                                   n_factor=self.n_factor,
-                                                   psi=self.psi,
-                                                   sigma_factor=self.sigma_factor)  # (B, Nb, 3)
-        force_repulsion = self.force_repulsion_net(repulsion_factor)  # (B, Nb, 3)
-        torque_repulsion = self.torque_repulsion_net(repulsion_factor)  # (B, Nb, 3)
+        # if self.repulsion:
+        #     repulsion_factor = repulsion_calculator_v1(R, dr_norm, dr_orient_dot,
+        #                                                dr_n_orient_dot,
+        #                                                orient_n_orient_dot,
+        #                                                n_factor=self.n_factor,
+        #                                                psi=self.psi,
+        #                                                sigma_factor=self.sigma_factor)
+        #
+        #     force_repulsion = self.force_repulsion_net(repulsion_factor)  # (B, Nb, 3)
+        #     torque_repulsion = self.torque_repulsion_net(repulsion_factor)  # (B, Nb, 3)
 
         ############# Force Net ##############
-        force_enc = self.force_net(all_features)  # (B, Nb, 3)
-        force_out = self.force_pre_factor * force_enc + force_repulsion
+        force_enc = self.force_net(features)  # (B, Nb, 3)
+        force_out = self.force_pre_factor * force_enc
 
         ############# Torque Net ##############
-        torque_enc = self.torque_net(all_features)  # (B, Nb, 3)
-        torque_out = self.torque_pre_factor * torque_enc + torque_repulsion
+        torque_enc = self.torque_net(features)  # (B, Nb, 3)
+        torque_out = self.torque_pre_factor * torque_enc
 
         predicted_force = torch.sum(force_out, dim=1).reshape(B, 3)
         predicted_torque = torch.sum(torque_out, dim=1).reshape(B, 3)
