@@ -12,6 +12,7 @@ parameters["data_path"] ="/home/marjan/Documents/fry/ml_dataset/pps_N800"
 parameters["batch_size"] = 8
 parameters["shrink"] = True
 parameters["overfit"] = False
+parameters["shrink_factor"] = 0.1
 parameters["train_idx"] = 0
 
 
