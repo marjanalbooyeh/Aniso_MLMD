@@ -165,13 +165,13 @@ class ParticleTorForPredictor_V1(nn.Module):
         if initial_weights:
             self.force_net.apply(self.weights_init)
             self.torque_net.apply(self.weights_init)
-            self.force_repulsion_net.apply(self.weights_init)
-            self.torque_repulsion_net.apply(self.weights_init)
+            # self.force_repulsion_net.apply(self.weights_init)
+            # self.torque_repulsion_net.apply(self.weights_init)
 
     def weights_init(self, m):
         if isinstance(m, nn.Linear):
-            nn.init.xavier_uniform_(m.weight.data)
-            nn.init.xavier_uniform_(m.bias.data)
+            nn.init.xavier_normal_(m.weight.data, gain=1.5)
+            # nn.init.xavier_normal_(m.bias.data)
 
     def _MLP_net(self, in_dim, h_dim, out_dim,
                  n_layers, act_fn):

@@ -37,12 +37,12 @@ class MSLLoss(nn.Module):
 
     def __init__(self):
         super(MSLLoss, self).__init__()
+        self.mse = nn.MSELoss()
 
     def forward(self, pred_force, target_force, pred_torque, target_torque):
-        return torch.mean((torch.log(pred_force + 1) - torch.log(
-            target_force + 1)) ** 2) + torch.mean(
-            (torch.log(pred_torque + 1) - torch.log(target_torque + 1)) ** 2)
-
+        a= torch.sqrt(self.mse(torch.log(pred_force +1), torch.log(target_force+1)))
+        b =torch.sqrt(self.mse(torch.log(pred_torque +1), torch.log(target_torque+1)))
+        return a + b
 
 class ForTorTrainer:
     def __init__(self, config, job_id, ):
@@ -269,13 +269,14 @@ class ForTorTrainer:
             predicted_force, predicted_torque = self.model(
                 dr, orientation, n_orientation)
 
-            scaled_target_force = ((target_force - self.aniso_data_loader.force_mean) / self.aniso_data_loader.force_std).to(self.device)
-            scaled_target_torque = ((target_torque - self.aniso_data_loader.torque_mean) / self.aniso_data_loader.torque_std).to(self.device)
-            # target_force = target_force.to(self.device)
-            # target_torque = target_torque.to(self.device)
+            # scaled_target_force = ((target_force - self.aniso_data_loader.force_mean) / self.aniso_data_loader.force_std).to(self.device)
+            # scaled_target_torque = ((target_torque - self.aniso_data_loader.torque_mean) / self.aniso_data_loader.torque_std).to(self.device)
+            target_force = target_force.to(self.device)
+            target_torque = target_torque.to(self.device)
 
-            _loss = self.loss(predicted_force, scaled_target_force, predicted_torque,
-                              scaled_target_torque)
+            _loss = self.loss(predicted_force, target_force, predicted_torque,
+                              target_torque
+                              )
 
             train_loss += _loss.item()
             running_loss += _loss.item()
@@ -284,7 +285,7 @@ class ForTorTrainer:
             if self.clipping:
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1)
             self.optimizer.step()
-            del dr, orientation, n_orientation, scaled_target_torque, scaled_target_force, energy
+            del dr, orientation, n_orientation, energy
             if False and i % 500 == 499:
                 # if self.log:
                 #     wandb.log({'running_loss': running_loss / 99.,
@@ -298,45 +299,45 @@ class ForTorTrainer:
 
     def _validation(self, data_loader, print_output=False):
         self.model.eval()
-        # with torch.no_grad():
-        total_error = 0.
-        batch_counter = 0
-        for i, (
-                (dr, orientation, n_orientation)
-                , target_force, target_torque, energy) in enumerate(
-            data_loader):
-            batch_counter += 1
-            dr.requires_grad = True
-            orientation.requires_grad = True
-            dr = dr.to(self.device)
-            orientation = orientation.to(self.device)
-            n_orientation = n_orientation.to(self.device)
+        with torch.no_grad():
+            total_error = 0.
+            batch_counter = 0
+            for i, (
+                    (dr, orientation, n_orientation)
+                    , target_force, target_torque, energy) in enumerate(
+                data_loader):
+                batch_counter += 1
+                dr.requires_grad = True
+                orientation.requires_grad = True
+                dr = dr.to(self.device)
+                orientation = orientation.to(self.device)
+                n_orientation = n_orientation.to(self.device)
 
-            predicted_force, predicted_torque = self.model(
-                dr, orientation, n_orientation)
-            predicted_force_rescale = predicted_force * self.aniso_data_loader.force_std.to(self.device) + self.aniso_data_loader.force_mean.to(self.device)
-            predicted_torque_rescale = predicted_torque * self.aniso_data_loader.torque_std.to(self.device) + self.aniso_data_loader.torque_mean.to(self.device)
+                predicted_force, predicted_torque = self.model(
+                    dr, orientation, n_orientation)
+                predicted_force_rescale = predicted_force * self.aniso_data_loader.force_std.to(self.device) + self.aniso_data_loader.force_mean.to(self.device)
+                predicted_torque_rescale = predicted_torque * self.aniso_data_loader.torque_std.to(self.device) + self.aniso_data_loader.torque_mean.to(self.device)
 
-            target_force = target_force.to(self.device)
+                target_force = target_force.to(self.device)
 
-            target_torque = target_torque.to(self.device)
+                target_torque = target_torque.to(self.device)
 
-            _error = self.root_mean_squared_error(predicted_force_rescale.detach(),
-                                                  target_force,
-                                                  predicted_torque_rescale.detach(),
-                                                  target_torque)
+                _error = self.root_mean_squared_error(predicted_force_rescale.detach(),
+                                                      target_force,
+                                                      predicted_torque_rescale.detach(),
+                                                      target_torque)
 
-            total_error += _error.item()
+                total_error += _error.item()
 
-            if print_output and i % 200 == 0:
-                print('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$')
-                print("force prediction: ", predicted_force_rescale[0])
-                print("force target: ", target_force[0])
-                print("torque prediction: ", predicted_torque_rescale[0])
-                print("torque target: ", target_torque[0])
-                print('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$')
-            del dr, orientation, n_orientation, target_force, target_torque, energy, predicted_force, predicted_torque
-            torch.cuda.empty_cache()
+                if print_output and i % 200 == 0:
+                    print('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$')
+                    print("force prediction: ", predicted_force_rescale[0])
+                    print("force target: ", target_force[0])
+                    print("torque prediction: ", predicted_torque_rescale[0])
+                    print("torque target: ", target_torque[0])
+                    print('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$')
+                del dr, orientation, n_orientation, target_force, target_torque, energy, predicted_force, predicted_torque
+                torch.cuda.empty_cache()
 
         return total_error / batch_counter
 
@@ -356,6 +357,8 @@ class ForTorTrainer:
 
         for epoch in range(self.epochs):
             train_loss = self._train()
+            if self.use_scheduler:
+                self.scheduler.step(train_loss)
             if epoch % 5 == 0:
                 print('####### epoch {}/{}: \n\t train_loss: {}'.
                       format(epoch + 1, self.epochs, train_loss))
