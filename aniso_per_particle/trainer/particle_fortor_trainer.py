@@ -162,8 +162,8 @@ class ForTorTrainer:
     def set_scheduler(self):
         if self.scheduler_type == "ReduceLROnPlateau":
             self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-                self.optimizer, factor=0.98, patience=self.scheduler_patience,
-                min_lr=self.min_lr, threshold=self.scheduler_threshold,
+                self.optimizer, factor=0.95, patience=self.scheduler_patience,
+                min_lr=self.min_lr,
                 verbose=True, cooldown=30)
         elif self.scheduler_type == "StepLR":
             self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer,

@@ -6,7 +6,7 @@ status, execute operations and submit them to a cluster. See also:
 
 from flow import FlowProject, directives
 from flow.environment import DefaultSlurmEnvironment
-from aniso_per_particle.trainer import EnergyTrainer
+from aniso_per_particle.trainer import ForTorTrainer
 
 
 class MyProject(FlowProject):
@@ -68,7 +68,7 @@ def sample(job):
         print("----------------------")
         print("Creating the Trainer class...")
         print("----------------------")
-        trainer_obj = EnergyTrainer(job.sp, job.id)
+        trainer_obj = ForTorTrainer(job.sp, job.id)
         if job.sp.log:
             job.doc["run_name"] = trainer_obj.wandb_run_name
             job.doc["run_path"] = trainer_obj.wandb_run_path
