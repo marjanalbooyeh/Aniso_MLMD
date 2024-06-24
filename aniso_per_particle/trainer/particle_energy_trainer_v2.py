@@ -257,7 +257,10 @@ class EnergyTrainer_V2:
 
             predicted_force, predicted_torque, predicted_energy = self.model(
                 dr, orientation, n_orientation)
-
+            print('train prediceted_force: ', predicted_force[0])
+            print('train target_force: ', target_force[0])
+            print('train prediceted_torque: ', predicted_torque[0])
+            print('train target_torque: ', target_torque[0])
             target_force = target_force.to(self.device)
             target_torque = target_torque.to(self.device)
 
