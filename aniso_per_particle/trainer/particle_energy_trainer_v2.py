@@ -7,7 +7,7 @@ import torch.nn as nn
 import wandb
 
 from aniso_per_particle.trainer.data_loader import AnisoParticleDataLoader
-from aniso_per_particle.model import ParticleEnergyPredictorHuang, ParticleEnergyPredictor_New, ParticleEnergyPredictor_V2
+from aniso_per_particle.model import EnergyPredictor_V2
 
 
 class MSELoss(nn.Module):
@@ -44,7 +44,7 @@ class MSLLoss(nn.Module):
             (torch.log(pred_torque + 1) - torch.log(target_torque + 1)) ** 2)
 
 
-class EnergyTrainer:
+class EnergyTrainer_V2:
     def __init__(self, config, job_id, ):
         print("***************CUDA: ", torch.cuda.is_available())
         self.resume = config.resume
@@ -58,17 +58,10 @@ class EnergyTrainer:
         self.batch_size = config.batch_size
         self.overfit = config.overfit
         self.train_idx = config.train_idx
-
+        self.processor_type = config.processor_type
+        self.scale_range = config.scale_range
         # model parameters
         self.in_dim = config.in_dim
-
-        self.prior_net_config = {
-            "hidden_dim": config.prior_hidden_dim,
-            "n_layers": config.prior_n_layers,
-            "act_fn": config.prior_act_fn,
-            "pre_factor": config.prior_pre_factor,
-            "n": config.prior_n
-        }
 
         self.energy_net_config = {
             "hidden_dim": config.energy_hidden_dim,
@@ -78,7 +71,6 @@ class EnergyTrainer:
 
         self.dropout = config.dropout
         self.batch_norm = config.batch_norm
-        self.model_type = config.model_type
         self.initial_weight = config.initial_weight
         self.gain = config.gain
 
@@ -105,7 +97,9 @@ class EnergyTrainer:
         self.aniso_data_loader = AnisoParticleDataLoader(config.data_path,
                                                          config.batch_size,
                                                          config.overfit,
-                                                         train_idx=self.train_idx)
+                                                         train_idx=self.train_idx,
+                                                         processor_type=config.processor_type,
+                                                         scale_range=config.scale_range,)
 
         self.train_dataloader = self.aniso_data_loader.get_train_dataset()
         if not self.overfit:
@@ -167,29 +161,14 @@ class EnergyTrainer:
                                                              verbose=True)
 
     def _create_model(self):
-        if self.model_type == "huang":
-            model = ParticleEnergyPredictorHuang(in_dim=self.in_dim,
-                                                 prior_net_config=self.prior_net_config,
-                                                 energy_net_config=self.energy_net_config,
-                                                 dropout=self.dropout,
-                                                 batch_norm=self.batch_norm,
-                                                 device=self.device)
-        elif self.model_type == "v2":
-            model = ParticleEnergyPredictor_V2(in_dim=self.in_dim,
-                                                 prior_net_config=self.prior_net_config,
-                                                 energy_net_config=self.energy_net_config,
-                                                 dropout=self.dropout,
-                                                 batch_norm=self.batch_norm,
-                                                 device=self.device,
-                                                initial_weights=self.initial_weight)
-        else:
-            model = ParticleEnergyPredictor_New(in_dim=self.in_dim,
-                                                prior_net_config=self.prior_net_config,
-                                                energy_net_config=self.energy_net_config,
-                                                dropout=self.dropout,
-                                                batch_norm=self.batch_norm,
-                                                device=self.device,
-                                                initial_weights=self.initial_weight)
+        model = EnergyPredictor_V2(in_dim=self.in_dim,
+                                    energy_net_config=self.energy_net_config,
+                                    dropout=self.dropout,
+                                    batch_norm=self.batch_norm,
+                                    device=self.device,
+                                    initial_weights=self.initial_weight,
+                                    gain=self.gain)
+
         model.to(self.device)
         return model
 
@@ -207,13 +186,13 @@ class EnergyTrainer:
             "overfit": self.overfit,
             "batch_size": self.batch_size,
             "train_idx": self.train_idx,
+            "processor_type": self.processor_type,
+            "scale_range": self.scale_range,
             "lr": self.lr,
             "in_dim": self.in_dim,
-            "prior_net_config": self.prior_net_config,
             "energy_net_config": self.energy_net_config,
             "dropout": self.dropout,
             "batch_norm": self.batch_norm,
-            "model_type": self.model_type,
             "initial_weight": self.initial_weight,
             "gain": self.gain,
             "optim": self.optim,
@@ -322,6 +301,25 @@ class EnergyTrainer:
 
             predicted_force, predicted_torque, predicted_energy = self.model(
                 dr, orientation, n_orientation)
+            print('predicted_force_before: ', predicted_force[0])
+            print('target_force_before: ', target_force[0])
+            print('&&&')
+            print('predicted_torque_before: ', predicted_torque[0])
+            print('target_torque_before: ', target_torque[0])
+
+            if self.processor_type == "MinMaxScaler":
+                predicted_force = self.aniso_data_loader.force_scaler.inv_transform(
+                    predicted_force).to(self.device)
+                predicted_torque = self.aniso_data_loader.torque_scaler.inv_transform(
+                    predicted_torque).to(self.device)
+                target_force = self.aniso_data_loader.force_scaler.inv_transform(
+                    target_force)
+                target_torque = self.aniso_data_loader.torque_scaler.inv_transform(
+                    target_torque)
+                print('predicted_force_after: ', predicted_force[0])
+                print('predicted_torque_after: ', predicted_torque[0])
+                print('target_force_after: ', target_force[0])
+                print('target_torque_after: ', target_torque[0])
 
             target_force = target_force.to(self.device)
 
