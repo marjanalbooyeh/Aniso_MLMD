@@ -30,8 +30,8 @@ def get_parameters():
     parameters["batch_size"] = [8]
     parameters["shrink"] = [False]
     parameters["shrink_factor"] = [0.0001]
-    parameters["overfit"] = False
-    parameters["train_idx"] = 0
+    parameters["overfit"] = [False]
+    parameters["train_idx"] = [0]
     parameters["processor_type"] = [None]
     parameters["scale_range"] = [(0, 1)]
 
