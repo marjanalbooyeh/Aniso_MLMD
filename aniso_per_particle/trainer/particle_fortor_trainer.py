@@ -283,7 +283,7 @@ class ForTorTrainer:
 
             _loss.backward()
             if self.clipping:
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1)
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), 100)
             self.optimizer.step()
             del dr, orientation, n_orientation, energy
             if False and i % 500 == 499:
@@ -315,26 +315,27 @@ class ForTorTrainer:
 
                 predicted_force, predicted_torque = self.model(
                     dr, orientation, n_orientation)
-                predicted_force_rescale = predicted_force * self.aniso_data_loader.force_std.to(self.device) + self.aniso_data_loader.force_mean.to(self.device)
-                predicted_torque_rescale = predicted_torque * self.aniso_data_loader.torque_std.to(self.device) + self.aniso_data_loader.torque_mean.to(self.device)
+                # predicted_force_rescale = predicted_force * self.aniso_data_loader.force_std.to(self.device) + self.aniso_data_loader.force_mean.to(self.device)
+                # predicted_torque_rescale = predicted_torque * self.aniso_data_loader.torque_std.to(self.device) + self.aniso_data_loader.torque_mean.to(self.device)
 
                 target_force = target_force.to(self.device)
 
                 target_torque = target_torque.to(self.device)
 
-                _error = self.root_mean_squared_error(predicted_force_rescale.detach(),
+                _error = self.root_mean_squared_error(predicted_force.detach(),
                                                       target_force,
-                                                      predicted_torque_rescale.detach(),
+                                                      predicted_torque.detach(),
                                                       target_torque)
 
                 total_error += _error.item()
 
                 if print_output and i % 200 == 0:
+                    print_idx = torch.randint(0, predicted_force.shape[0])
                     print('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$')
-                    print("force prediction: ", predicted_force_rescale[0])
-                    print("force target: ", target_force[0])
-                    print("torque prediction: ", predicted_torque_rescale[0])
-                    print("torque target: ", target_torque[0])
+                    print("force prediction: ", predicted_force[print_idx])
+                    print("force target: ", target_force[print_idx])
+                    print("torque prediction: ", predicted_torque[print_idx])
+                    print("torque target: ", target_torque[print_idx])
                     print('$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$')
                 del dr, orientation, n_orientation, target_force, target_torque, energy, predicted_force, predicted_torque
                 torch.cuda.empty_cache()

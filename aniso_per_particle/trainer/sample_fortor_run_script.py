@@ -4,16 +4,16 @@ parameters = OrderedDict()
 # project parameters
 parameters["project"] = "overfit-June4"
 parameters["group"] = "energy-V2"
-parameters["log"] = True
+parameters["log"] = False
 parameters["resume"] = False
 
 # dataset parameters700
-parameters["data_path"] ="/home/marjan/Documents/fry/ml_dataset/pps_N800"
+parameters["data_path"] ="/home/marjan/Documents/code-base/ml_datasets/PPS_800_June10"
 parameters["batch_size"] = 8
 parameters["shrink"] = True
 parameters["overfit"] = True
 parameters["shrink_factor"] = 0.01
-parameters["train_idx"] = 0
+parameters["train_idx"] = "10k"
 
 
 
@@ -22,13 +22,13 @@ parameters["in_dim"] = 18
 parameters["out_dim"] = 3
 
 
-parameters["force_hidden_dim"] = [5, 128]
-parameters["force_n_layers"] = 1
+parameters["force_hidden_dim"] = [32, 128, 64, 32]
+parameters["force_n_layers"] = 3
 parameters["force_act_fn"] = "LeakyReLU"
 parameters["force_pre_factor"] = 1.0
 
-parameters["torque_hidden_dim"] = [5, 128]
-parameters["torque_n_layers"] = 1
+parameters["torque_hidden_dim"] = [32, 128, 64, 32 ]
+parameters["torque_n_layers"] = 3
 parameters["torque_act_fn"] = "LeakyReLU"
 parameters["torque_pre_factor"] = 1.0
 
@@ -42,9 +42,9 @@ parameters["batch_norm"] = False
 parameters["initial_weight"] = "xavier"
 # optimizer parameters
 parameters["optim"] = "Adam"
-parameters["lr"] = 0.5
+parameters["lr"] = 0.001
 parameters["min_lr"] = 0.0001
-parameters["use_scheduler"] = True
+parameters["use_scheduler"] = False
 parameters["scheduler_type"] = "ReduceLROnPlateau"
 parameters["scheduler_patience"] = 50
 parameters["scheduler_threshold"] = 20
@@ -54,7 +54,7 @@ parameters["loss_type"] = "mse"
 parameters["clipping"] = False
 
 # run parameters
-parameters["epochs"] = 5000
+parameters["epochs"] = 50000
 
 class Struct:
     def __init__(self, **entries):
