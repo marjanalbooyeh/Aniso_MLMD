@@ -72,7 +72,7 @@ class EnergyTrainer_V2:
         self.dropout = config.dropout
         self.batch_norm = config.batch_norm
         self.initial_weight = config.initial_weight
-        self.gain = config.gain
+        self.nonlinearity = config.nonlinearity
 
         # optimizer parameters
         self.optim = config.optim
@@ -167,7 +167,7 @@ class EnergyTrainer_V2:
                                     batch_norm=self.batch_norm,
                                     device=self.device,
                                     initial_weights=self.initial_weight,
-                                    gain=self.gain)
+                                    nonlinearity=self.nonlinearity)
 
         model.to(self.device)
         return model
@@ -194,7 +194,7 @@ class EnergyTrainer_V2:
             "dropout": self.dropout,
             "batch_norm": self.batch_norm,
             "initial_weight": self.initial_weight,
-            "gain": self.gain,
+            "nonlinearity": self.nonlinearity,
             "optim": self.optim,
             "decay": self.decay,
             "use_scheduler": self.use_scheduler,
@@ -257,10 +257,10 @@ class EnergyTrainer_V2:
 
             predicted_force, predicted_torque, predicted_energy = self.model(
                 dr, orientation, n_orientation)
-            print('train prediceted_force: ', predicted_force[0])
-            print('train target_force: ', target_force[0])
-            print('train prediceted_torque: ', predicted_torque[0])
-            print('train target_torque: ', target_torque[0])
+#           print('train prediceted_force: ', predicted_force[0])
+#           print('train target_force: ', target_force[0])
+#           print('train prediceted_torque: ', predicted_torque[0])
+#           print('train target_torque: ', target_torque[0])
             target_force = target_force.to(self.device)
             target_torque = target_torque.to(self.device)
 
@@ -272,7 +272,7 @@ class EnergyTrainer_V2:
 
             _loss.backward()
             if self.clipping:
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), 5)
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
             self.optimizer.step()
             del dr, orientation, n_orientation, target_force, target_torque, energy
             if False and i % 500 == 499:
@@ -304,11 +304,11 @@ class EnergyTrainer_V2:
 
             predicted_force, predicted_torque, predicted_energy = self.model(
                 dr, orientation, n_orientation)
-            print('predicted_force_before: ', predicted_force[0])
-            print('target_force_before: ', target_force[0])
-            print('&&&')
-            print('predicted_torque_before: ', predicted_torque[0])
-            print('target_torque_before: ', target_torque[0])
+#            print('predicted_force_before: ', predicted_force[0])
+#            print('target_force_before: ', target_force[0])
+#            print('&&&')
+#            print('predicted_torque_before: ', predicted_torque[0])
+#            print('target_torque_before: ', target_torque[0])
 
             if self.processor_type == "MinMaxScaler":
                 predicted_force = self.aniso_data_loader.force_scaler.inv_transform(
@@ -319,10 +319,10 @@ class EnergyTrainer_V2:
                     target_force)
                 target_torque = self.aniso_data_loader.torque_scaler.inv_transform(
                     target_torque)
-                print('predicted_force_after: ', predicted_force[0])
-                print('predicted_torque_after: ', predicted_torque[0])
-                print('target_force_after: ', target_force[0])
-                print('target_torque_after: ', target_torque[0])
+#               print('predicted_force_after: ', predicted_force[0])
+#               print('predicted_torque_after: ', predicted_torque[0])
+#               print('target_force_after: ', target_force[0])
+#               print('target_torque_after: ', target_torque[0])
 
             target_force = target_force.to(self.device)
 
@@ -356,13 +356,13 @@ class EnergyTrainer_V2:
         if self.log:
             wandb.watch(models=self.model, criterion=self.loss,
                         log="gradients",
-                        log_freq=10)
+                        log_freq=1)
         print(
             '**************************Overfitting*******************************')
 
         for epoch in range(self.epochs):
             train_loss = self._train()
-            if epoch % 5 == 0:
+            if True:
                 print('####### epoch {}/{}: \n\t train_loss: {}'.
                       format(epoch + 1, self.epochs, train_loss))
                 if self.log:
@@ -381,7 +381,7 @@ class EnergyTrainer_V2:
             wandb.watch(models=self.model,
                         criterion=self.loss,
                         log="gradients",
-                        log_freq=10)
+                        log_freq=1)
 
         print(
             '**************************Training*******************************')
@@ -390,7 +390,7 @@ class EnergyTrainer_V2:
         for epoch in range(self.epochs):
 
             train_loss = self._train()
-            if epoch % 10 == 0:
+            if True:
                 val_error = self._validation(
                     self.valid_dataloader, print_output=True)
                 if self.use_scheduler:
