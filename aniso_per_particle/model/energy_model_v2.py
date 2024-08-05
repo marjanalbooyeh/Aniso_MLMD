@@ -40,15 +40,15 @@ class EnergyPredictor_V2(nn.Module):
             # nn.init.xavier_normal_(m.bias.data)
 
     def _MLP_net(self, in_dim, h_dim, out_dim,
-                 n_layers, act_fn):
+                 n_layers, act_fn, bn_dim=250):
 
         layers = [nn.Linear(in_dim, h_dim[0]),
                   get_act_fn(act_fn)]
         for i in range(n_layers):
             layers.append(
                 nn.Linear(h_dim[i], h_dim[i + 1]))
-            # if self.batch_norm:
-            #     layers.append(nn.BatchNorm1d(bn_dim))
+            if self.batch_norm:
+                layers.append(nn.BatchNorm1d(bn_dim))
             layers.append(get_act_fn(act_fn))
             layers.append(nn.Dropout(p=self.dropout))
         layers.append(
@@ -110,11 +110,11 @@ class EnergyPredictor_V2(nn.Module):
         torque_grad = torch.autograd.grad(predicted_energy.sum(),
                                           orientation,
                                           create_graph=True)[0].to(
-            self.device)  # (B, N, 3, 3)
+            self.device)  # (B, 3, 3)
 
-        tq_x = torch.cross(torque_grad[:, :, :, 0].reshape(-1, 3), orientation[:, :, :, 0].reshape(-1, 3))
-        tq_y = torch.cross(torque_grad[:, :, :, 1].reshape(-1, 3), orientation[:, :, :, 1].reshape(-1, 3))
-        tq_z = torch.cross(torque_grad[:, :, :, 2].reshape(-1, 3), orientation[:, :, :, 2].reshape(-1, 3))
+        tq_x = torch.cross(torque_grad[:, :, 0].reshape(-1, 3), orientation[:, :, :, 0].reshape(-1, 3))
+        tq_y = torch.cross(torque_grad[:, :, 1].reshape(-1, 3), orientation[:, :, :, 1].reshape(-1, 3))
+        tq_z = torch.cross(torque_grad[:, :, 2].reshape(-1, 3), orientation[:, :, :, 2].reshape(-1, 3))
         predicted_torque = (tq_x + tq_y + tq_z).to(self.device)
 
         return predicted_force, predicted_torque, predicted_energy
