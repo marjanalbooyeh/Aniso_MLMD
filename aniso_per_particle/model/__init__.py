@@ -2,4 +2,4 @@ from .utils import feature_vector, get_act_fn
 from .energy_model import ParticleEnergyPredictorHuang, ParticleEnergyPredictor_New, ParticleEnergyPredictor_V2
 from .force_torque_model import ParticleTorForPredictor_V1
 from .energy_model_v2 import EnergyPredictor_V2
-from .energy_model_v3 import EnergyPredictor_V3_Huang
+from .energy_model_v3 import EnergyPredictor_Residual
