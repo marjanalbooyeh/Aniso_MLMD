@@ -44,7 +44,7 @@ class MSLLoss(nn.Module):
             (torch.log(pred_torque + 1) - torch.log(target_torque + 1)) ** 2)
 
 
-class EnergyTrainer_V2:
+class EnergyTrainer_V3:
     def __init__(self, config, job_id, ):
         print("***************CUDA: ", torch.cuda.is_available())
         self.resume = config.resume
@@ -161,8 +161,8 @@ class EnergyTrainer_V2:
                 verbose=True, cooldown=30)
         elif self.scheduler_type == "StepLR":
             self.scheduler = torch.optim.lr_scheduler.StepLR(self.optimizer,
-                                                             step_size=50,
-                                                             gamma=0.98,
+                                                             step_size=100,
+                                                             gamma=0.7,
                                                              verbose=True)
 
     def _create_model(self):
@@ -368,6 +368,8 @@ class EnergyTrainer_V2:
 
         for epoch in range(self.epochs):
             train_loss = self._train()
+            if self.use_scheduler:
+                self.scheduler.step(train_loss)
             if True:
                 print('####### epoch {}/{}: \n\t train_loss: {}'.
                       format(epoch + 1, self.epochs, train_loss))

@@ -75,8 +75,6 @@ class EnergyPredictor_Residual(nn.Module):
             # nn.init.xavier_normal_(m.bias.data)
 
     def _MLP_net(self, in_dim, h_dim, out_dim, n_layers, act_fn):
-        if len(h_dim) != n_layers:
-            raise ValueError("Length of h_dim should be equal to n_layers")
 
         layers = [ResidualBlock(in_dim, h_dim[0], act_fn, self.batch_norm, self.dropout, self.bn_dim)]
 
