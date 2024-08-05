@@ -60,6 +60,7 @@ class EnergyTrainer_V2:
         self.train_idx = config.train_idx
         self.processor_type = config.processor_type
         self.scale_range = config.scale_range
+        self.shrink_factor = config.shrink_factor
         # model parameters
         self.in_dim = config.in_dim
 
@@ -99,7 +100,8 @@ class EnergyTrainer_V2:
                                                          config.overfit,
                                                          train_idx=self.train_idx,
                                                          processor_type=config.processor_type,
-                                                         scale_range=config.scale_range,)
+                                                         scale_range=config.scale_range,
+                                                         shrink_factor=self.shrink_factor)
 
         self.train_dataloader = self.aniso_data_loader.get_train_dataset()
         if not self.overfit:
@@ -257,10 +259,17 @@ class EnergyTrainer_V2:
 
             predicted_force, predicted_torque, predicted_energy = self.model(
                 dr, orientation, n_orientation)
-#           print('train prediceted_force: ', predicted_force[0])
-#           print('train target_force: ', target_force[0])
-#           print('train prediceted_torque: ', predicted_torque[0])
-#           print('train target_torque: ', target_torque[0])
+
+            if self.processor_type == "MinMaxScaler":
+                predicted_force = self.aniso_data_loader.force_scaler.inv_transform(
+                    predicted_force).to(self.device)
+                predicted_torque = self.aniso_data_loader.torque_scaler.inv_transform(
+                    predicted_torque).to(self.device)
+                target_force = self.aniso_data_loader.force_scaler.inv_transform(
+                    target_force)
+                target_torque = self.aniso_data_loader.torque_scaler.inv_transform(
+                    target_torque)
+
             target_force = target_force.to(self.device)
             target_torque = target_torque.to(self.device)
 
@@ -304,11 +313,6 @@ class EnergyTrainer_V2:
 
             predicted_force, predicted_torque, predicted_energy = self.model(
                 dr, orientation, n_orientation)
-#            print('predicted_force_before: ', predicted_force[0])
-#            print('target_force_before: ', target_force[0])
-#            print('&&&')
-#            print('predicted_torque_before: ', predicted_torque[0])
-#            print('target_torque_before: ', target_torque[0])
 
             if self.processor_type == "MinMaxScaler":
                 predicted_force = self.aniso_data_loader.force_scaler.inv_transform(
@@ -319,10 +323,7 @@ class EnergyTrainer_V2:
                     target_force)
                 target_torque = self.aniso_data_loader.torque_scaler.inv_transform(
                     target_torque)
-#               print('predicted_force_after: ', predicted_force[0])
-#               print('predicted_torque_after: ', predicted_torque[0])
-#               print('target_force_after: ', target_force[0])
-#               print('target_torque_after: ', target_torque[0])
+
 
             target_force = target_force.to(self.device)
 
@@ -362,7 +363,9 @@ class EnergyTrainer_V2:
 
         for epoch in range(self.epochs):
             train_loss = self._train()
-            if True:
+
+            if epoch % 5 == 0:
+
                 print('####### epoch {}/{}: \n\t train_loss: {}'.
                       format(epoch + 1, self.epochs, train_loss))
                 if self.log:
