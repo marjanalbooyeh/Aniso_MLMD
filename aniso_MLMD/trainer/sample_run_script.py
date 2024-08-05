@@ -21,6 +21,9 @@ parameters["tags"] = "random sampling"
 # dataset parameters
 parameters["data_path"] = "/home/marjan/Documents/code-base/ml_datasets/pps_20_new"
 parameters["batch_size"] = 32
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 parameters["shrink"] = False
 parameters["overfit"] = True
@@ -71,7 +74,11 @@ parameters["clipping"] = True
 
 # run parameters
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 parameters["epochs"] = 5000
+=======
+parameters["epochs"] = 50
+>>>>>>> Stashed changes
 =======
 parameters["epochs"] = 50
 >>>>>>> Stashed changes
