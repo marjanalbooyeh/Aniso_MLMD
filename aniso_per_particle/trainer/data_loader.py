@@ -30,9 +30,11 @@ class ParticleConfigDataset(Dataset):
         self.torque = torch.from_numpy(np.array(list(traj_df['torque']))).type(
             torch.FloatTensor)
         if force_scaler is not None:
+            print('force_scaler.transform')
             self.force = force_scaler.transform(self.force)
         if torque_scaler is not None:
             self.torque = torque_scaler.transform(self.torque)
+            print('torque_scaler.transform')
 
     def __len__(self):
         return len(self.dr)
@@ -61,21 +63,21 @@ class MinMaxScaler:
         self.X_max = self.X.max(dim=0)[0]
 
     def transform(self, data):
-        n_sample, n_beads, _ = data.shape
+        n_sample, _ = data.shape
         data = data.reshape(-1, 3)
         X_std = (data - self.X_min) / (self.X_max - self.X_min)
         transformed_data = X_std * (self.max - self.min) + self.min
-        return transformed_data.reshape(n_sample, n_beads, 3).to(data.device)
+        return transformed_data.reshape(n_sample, 3).to(data.device)
 
     def inv_transform(self, data):
-        n_sample, n_beads, _ = data.shape
+        n_sample, _ = data.shape
         data = data.reshape(-1, 3)
         self.X_min = self.X_min.to(data.device)
         self.X_max = self.X_max.to(data.device)
         u = ((data - self.min) * (self.X_max - self.X_min)) / (
                 self.max - self.min)
         inv_transformed_data = u + self.X_min
-        return inv_transformed_data.reshape(n_sample, n_beads, 3).to(
+        return inv_transformed_data.reshape(n_sample, 3).to(
             data.device)
 
 
@@ -105,6 +107,7 @@ class AnisoParticleDataLoader:
         self.torque_scaler = None
         # create force and torque scalers
         if self.processor_type == "MinMaxScaler":
+            print(self.processor_type)
             self.train_force = torch.from_numpy(
                 np.array(list(self.train_df['force']))).type(
                 torch.FloatTensor)

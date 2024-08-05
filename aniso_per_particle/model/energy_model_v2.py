@@ -8,7 +8,7 @@ class EnergyPredictor_V2(nn.Module):
                  batch_norm=False,
                  device=None,
                  initial_weights=None,
-                 gain=1.5,
+                 nonlinearity="relu",
                  ):
         super(EnergyPredictor_V2, self).__init__()
 
@@ -21,14 +21,14 @@ class EnergyPredictor_V2(nn.Module):
         self.device = device
         self.in_dim = in_dim
         self.batch_norm = batch_norm
-        self.gain = gain
+        self.nonlinearity = nonlinearity
+        self.initial_weights = initial_weights
 
         self.energy_net = self._MLP_net(in_dim=self.in_dim,
                                         h_dim=self.energy_hidden_dim,
                                         out_dim=1,
                                         n_layers=self.energy_n_layers,
-                                        act_fn=self.energy_act_fn,
-                                        bn_dim=self.energy_hidden_dim).to(self.device)
+                                        act_fn=self.energy_act_fn).to(self.device)
 
 
         if initial_weights:
@@ -36,7 +36,16 @@ class EnergyPredictor_V2(nn.Module):
 
     def weights_init(self, m):
         if isinstance(m, nn.Linear):
-            nn.init.xavier_normal_(m.weight.data, gain=self.gain)
+            if self.initial_weights == "xavier_normal":
+                nn.init.xavier_normal_(m.weight.data, gain=nn.init.calculate_gain(self.nonlinearity))
+            elif self.initial_weights == "xavier_uniform":
+                nn.init.xavier_uniform_(m.weight.data, gain=nn.init.calculate_gain(self.nonlinearity))
+            elif self.initial_weights == "kaiming_normal":
+                nn.init.kaiming_normal_(m.weight, nonlinearity=self.nonlinearity)
+            elif self.initial_weights == "kaiming_uniform":
+                nn.init.kaiming_uniform_(m.weight, nonlinearity=self.nonlinearity)
+            if m.bias is not None:
+                m.bias.data.fill_(0.01)
             # nn.init.xavier_normal_(m.bias.data)
 
     def _MLP_net(self, in_dim, h_dim, out_dim,
@@ -95,28 +104,22 @@ class EnergyPredictor_V2(nn.Module):
 
         ############# Energy Net ##############
         energy = self.energy_net(features)  # (B, Nb, 1)
-
         predicted_energy = torch.sum(energy, dim=1)
 
         ################## Calculate Force ##################
         neighbors_force = torch.autograd.grad(predicted_energy.sum(),
                                               dr,
                                               create_graph=True)[0].to(
-            self.device)  # (B, N, N_neighbors, 3)
-
+            self.device)  
         predicted_force = torch.sum(neighbors_force, dim=1).reshape(B, 3)
-
         ################## Calculate Torque ##################
         torque_grad = torch.autograd.grad(predicted_energy.sum(),
                                           orientation,
-                                          create_graph=True)[0].to(
-            self.device)  # (B, 3, 3)
+                                          create_graph=True)[0].to(self.device)
+        tq_x = torch.cross(torque_grad[:, :, 0].reshape(-1, 3), orientation[:,  :, 0].reshape(-1, 3))
+        tq_y = torch.cross(torque_grad[:, :, 1].reshape(-1, 3), orientation[:, :, 1].reshape(-1, 3))
+        tq_z = torch.cross(torque_grad[:, :, 2].reshape(-1, 3), orientation[:,  :, 2].reshape(-1, 3))
 
-        tq_x = torch.cross(torque_grad[:, :, 0].reshape(-1, 3), orientation[:, :, :, 0].reshape(-1, 3))
-        tq_y = torch.cross(torque_grad[:, :, 1].reshape(-1, 3), orientation[:, :, :, 1].reshape(-1, 3))
-        tq_z = torch.cross(torque_grad[:, :, 2].reshape(-1, 3), orientation[:, :, :, 2].reshape(-1, 3))
         predicted_torque = (tq_x + tq_y + tq_z).to(self.device)
-
         return predicted_force, predicted_torque, predicted_energy
 
-        return predicted_force, predicted_torque
