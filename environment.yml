@@ -5,13 +5,8 @@ channels:
   - nvidia
   - defaults
 dependencies:
-<<<<<<< Updated upstream
   - pytorch=2.2.1
   - pytorch-cuda=11.8
-=======
-  - pytorch
-  - flowermd
->>>>>>> Stashed changes
   - numpy
   - rowan
   - signac=1.7.0
